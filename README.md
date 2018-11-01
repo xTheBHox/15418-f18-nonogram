@@ -46,9 +46,23 @@ In some cases the entire puzzle will not have any rows and columns that can be s
 
 ## The Challenge
 
-In particular, ambiguous states are difficult for automated solvers because there is very little per-cell heuristic on which assumptions are likely to cause a contradiction or likely to be part of the solution. Ideally, the solver would pick an assumption that will quickly lead to a contradiction to reduce time spent computing states that are not part of the solution. Determining which assumption of all possible assumptions is non-trivial to determine and relies on heuristics.
+It is likely that three areas of the problem will be parallelized: **simple solving**, **lookahead solving**, and **heuristics**.
 
-As such, the challenge will be to find a heuristic that lends itself to parallelism. It is likely that 
+### Simple solving
+
+In simple solving, we have a single shared state. Since each line can be solved with only the data in the line, we can parallelize this by line with some form of synchronization between rows and columns (which share data).
+
+### Lookahead solving
+
+In lookahead solving, the solver essentially explores a tree of possible future states based on an assumptions made in the current state. Simple solving is required when traversing to a future state. This provides two axes of parallelism: simple solving within each branch and testing different assumptions in parallel. Since exploring different assumptions will likely lead to contradictions in drastically varying amounts of time, some sort of dynamic scheduling will be required. It is also likely that different branches of the tree merge at future times since different assumptions can lead to the same state, and efficient communication between threads will be required to determine if and when this happens in order to avoid redundant work.
+
+### Heuristics
+
+In particular, ambiguous states are difficult for solvers because there is very little per-cell heuristic on which assumptions are likely to cause a contradiction or likely to be part of the solution. Ideally, the solver would pick an assumption that will quickly lead to a contradiction to reduce time spent computing states that are not part of the solution. Determining which assumption of all possible assumptions is non-trivial to determine and relies on heuristics.
+
+As such, the challenge will be to find a heuristic that lends itself well to parallelism. Here, we distinguish heuristics from lookahead solving by defining heuristics as computation involving only the current board state and no future board states.
+
+It is likely that heuristics will involve data structures other than a boolean array representation of the board, and these data structures will also have to be optimized for parallel computation.
 
 ## Resources
 
