@@ -1,4 +1,4 @@
-Benjmain Huang (zemingbh) and Eric Sun (ehsun)
+Benjamin Huang (zemingbh) and Eric Sun (ehsun)
 
 ## Summary
 
