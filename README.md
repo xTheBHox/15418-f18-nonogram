@@ -116,9 +116,14 @@ CUDA: for GPU utilization
 ## Schedule
 
 12 Nov: Working solver
+
 19 Nov: Working parallel solver with significant speedups on lookahead solving
+
 26 Nov: Derive heuristics
+
 3 Dec: Implement heuristics
+
 10 Dec: Optimize for parallelism, take benchmarks
+
 15 Dec: Final report due
 
