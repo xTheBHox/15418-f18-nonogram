@@ -77,7 +77,7 @@ https://github.com/seansxiao/nonogram-solver (using CPU, only naive heuristics)
 
 ## Goals / Deliverables
 
-### Solver implemmentation:
+### Solver implementation
 #### Low-ambiguity puzzles
 Fast (good constants)
 Scale well with size (linear/linearithmic)
