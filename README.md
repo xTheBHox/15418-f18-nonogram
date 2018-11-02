@@ -116,7 +116,11 @@ Extend to other logic puzzles (Slitherlink, etc.)
 
 ### Machine
 
-Using a GPU or a heterogeneous configuration is suitable because the problem inherently has many small parts (many cells, many rows, many columns). Therefore, puzzles can be divided up into many small semi-independent problems with shared memory (by line or by cell). However, there is unlikely to be much use for SIMD parallelism. As such, it may be useful to try it on a processor like a Xeon Phi which has a large number of independent processors but better performance with divergent execution.
+We believe GPUs are a good platform for this solver for a number of reasons. One is that, excluding heuristics (which will require us to do more research), the majority of the workload is using simple solving techniques to either find that a certain state has a contradiction somewhere down the line, or that it can be brought to a different state that requires assumptions to be made.
+
+All of the simple solving techniques can be run in parallel by row and column (as described above). Because the same methods will be employed across each row and column, there is the potential for SIMD parallelism to be useful. Additionally, puzzles are small and can take advantage of thread block shared memory, which in GPUs is significantly faster than global memory. Finally, the small size of each puzzle means that they can be copied in and out of memory extremely quickly.
+
+Finally, it may be useful to try writing our solver to run on a processor like a Xeon Phi which has a large number of independent processors but better performance with divergent execution.
 
 ### Languages
 C++: Fast, with good library support.
