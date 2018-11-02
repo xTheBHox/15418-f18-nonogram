@@ -72,7 +72,7 @@ It is likely that heuristics will involve data structures other than a boolean a
 
 There have been two past projects on Nonograms and a number of past projects on other logic puzzles (mainly Sudokus).
 https://github.com/seansxiao/nonogram-solver (S17, using CPU, only naive heuristics)
-http://www.andrew.cmu.edu/user/marjorie/parallelpbn/parallelpbn.html (S15, OpenMP, 
+http://www.andrew.cmu.edu/user/marjorie/parallelpbn/parallelpbn.html (S15, OpenMP, poor parallel speedup)
 
 
 ## Goals / Deliverables
