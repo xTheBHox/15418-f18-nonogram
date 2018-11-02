@@ -86,31 +86,38 @@ http://www.andrew.cmu.edu/user/marjorie/parallelpbn/parallelpbn.html (S15, OpenM
 
 ## Goals / Deliverables
 
-### Solver implementation
-#### Low-ambiguity puzzles
-Fast (good constants)
+### Implementations
 
-Scale well with size (linear/linearithmic)
+#### 1. Serial Implementation
+- Able to solve puzzles correctly, implementing simple solving techniques and lookahead solving.
+- Does not necessarily implement any heuristics for lookahead solving.
+- Does not scale well with puzzle size.
+- Does not scale well with puzzle ambiguity.
 
-Some speedup with number of processors for larger puzzles
+#### 2. Parallel Implementation
+- Able to solve puzzles correctly, implementing simple solving techniques parallelized across rows and columns, and lookahead solving parallelized across assumptions.
+- Does not necessarily implement any heuristics for lookahead solving.
+- Scales well with puzzle size.
+- Scales somewhat well with puzzle ambiguity.
 
-#### High-ambiguity puzzles
-Very good speedup with number of processors
+#### 3. Good Parallel Implementation
+- Able to solve puzzles correctly, implementing simple solving techniques parallelized across rows and columns, and lookahead solving parallelized across assumptions.
+- Implements heuristics for lookahead solving.
+- Scales well with puzzle size.
+- Scales well with puzzle ambiguity.
 
-Some scaling with size
+### Other Deliverables
 
-### Theoretical
-Parallelizable heuristics with theoretical foundation
+#### Demo
+Animations of puzzles being solved and the steps taken by the solver for various puzzles.
 
-### Demo
-Show graphical animation of puzzle being solved (and the steps taken by the solver) on varying puzzles
+#### Speedup graphs
 
-Show speedup graphs
+Show speedup graphs for various puzzle sizes/ambiguities.
 
 ### Stretch goals
-Extend to Nonogram variants (additional colors, unordered constraints)
-
-Extend to other logic puzzles (Slitherlink, etc.)
+- Extend to Nonogram variants (additional colors, unordered constraints).
+- Extend to other logic puzzles (Slitherlink, etc.)
 
 ## Platform
 
@@ -123,8 +130,8 @@ All of the simple solving techniques can be run in parallel by row and column (a
 Finally, it may be useful to try writing our solver to run on a processor like a Xeon Phi which has a large number of independent processors but better performance with divergent execution.
 
 ### Languages
-C++: Fast, with good library support.
-CUDA: for GPU utilization
+- C++: Fast, with good library support.
+- CUDA: for GPU utilization.
 
 ## Schedule
 
