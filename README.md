@@ -1,3 +1,5 @@
+# Parallel Nonogram Solver
+
 Benjamin Huang (zemingbh) and Eric Sun (ehsun)
 
 ## Summary
@@ -70,7 +72,22 @@ Using a GPU or a heterogenous configuration is suitable because the problem inhe
 
 ## Goals / Deliverables
 
+### Solver implemmentation:
+#### Low-ambiguity puzzles
+Fast (good constants)
+Scale well with size (linear/linearithmic)
+Some speedup with number of processors for larger puzzles
 
+#### High-ambiguity puzzles
+Very good speedup with numner of processors
+Some scaling with size
+
+### Theoretical
+Parallelizable heuristics with theoretical foundation
+
+### Strecth goals
+Extend to Nonogram variants (additional colors, unordered constraints)
+Extend to other logic puzzles (Slitherlink, etc.)
 
 ## Platform
 
