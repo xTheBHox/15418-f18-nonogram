@@ -54,11 +54,19 @@ With regard to parallelism, it is likely that three areas of the problem will be
 
 ### Simple solving
 
-In simple solving, we have a single shared state. Since each line can be solved with only the data in the line, we can parallelize this by line with some form of synchronization between rows and columns (which share data).
+Simple solving is a set of strategies similar to the ones described in the background above, where certain cells in a row or column can be determined to be filled or not based solely on the rest of that row or column. For these strategies we can parallelize by row or column, and use shared memory.
+
+Note that if using shared memory, we cannot operate on rows and columns simultaneously. We either have to introduce some synchronization between solving rows and then solving columns, or use one block of shared memory for each and do some reconciliation at the end of each iteration.
+
+Some puzzles can be solved by doing iterations of simple solving techniques until each row and column satisfies the constraints. It will be most efficient to use simple solving techniques in the first phase of our parallel implementation because they can greatly reduce the search space of each puzzle.
 
 ### Lookahead solving
 
-In lookahead solving, the solver essentially explores a tree of possible future states based on an assumptions made in the current state. Simple solving is required when traversing to a future state. This provides two axes of parallelism: simple solving within each branch and testing different assumptions in parallel. Since exploring different assumptions will likely lead to contradictions in drastically varying amounts of time, some sort of dynamic scheduling will be required. It is also likely that different branches of the tree merge at future times since different assumptions can lead to the same state, and efficient communication between threads will be required to determine if and when this happens in order to avoid redundant work.
+Lookahead solving is a strategy that involves making an assumption in the current state, and exploring the tree of future states that result from that assumption. The goal is to prune that tree by finding states with contradictions. Every time an assumption is made, simple solving techniques will be used to either find a contradiction in the resulting state and invalidate the assumption (or in other words, validate the opposite), or get to a new state where more assumptions must be made.
+
+Thus we have two axes of parallelism: simple solving within each branch and testing different assumptions in parallel. Since exploring different assumptions will likely lead to contradictions in drastically varying amounts of time, some sort of dynamic scheduling will be required.
+
+It is also likely that different branches of the tree merge at future times since different assumptions can lead to the same state, and efficient communication between threads will be required to determine if and when this happens in order to avoid redundant work. In a sequential solver, dynamic programming could be used to find common subproblems, and it's likely a similar approach could work here.
 
 ### Heuristics
 
