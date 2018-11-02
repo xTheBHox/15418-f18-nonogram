@@ -48,7 +48,9 @@ In some cases the entire puzzle will not have any rows and columns that can be s
 
 ## The Challenge
 
-It is likely that three areas of the problem will be parallelized: **simple solving**, **lookahead solving**, and **heuristics**.
+Nonograms are interesting because they are not a particularly mainstream type of logic puzzle, which means existing research is scarcer,  and are not obviously reducible to other problems. There are also much fewer existing implementations of solvers.
+
+With regard to parallelism, it is likely that three areas of the problem will be parallelized: **simple solving**, **lookahead solving**, and **heuristics**.
 
 ### Simple solving
 
@@ -68,7 +70,10 @@ It is likely that heuristics will involve data structures other than a boolean a
 
 ## Resources
 
-Using a GPU or a heterogenous configuration is suitable because the problem inherently has many small parts (many cells, many rows, many columns). 
+There have been two past projects on Nonograms and a number of past projects on other logic puzzles (mainly Sudokus).
+https://github.com/seansxiao/nonogram-solver (using CPU, only naive heuristics)
+
+
 
 ## Goals / Deliverables
 
@@ -85,14 +90,30 @@ Some scaling with size
 ### Theoretical
 Parallelizable heuristics with theoretical foundation
 
-### Strecth goals
+### Demo
+Show graphical animation of puzzle being solved (and the steps taken by the solver) on varying puzzles
+Show speedup graphs
+
+### Stretch goals
 Extend to Nonogram variants (additional colors, unordered constraints)
 Extend to other logic puzzles (Slitherlink, etc.)
 
 ## Platform
 
+### Machine
 
+Using a GPU or a heterogenous configuration is suitable because the problem inherently has many small parts (many cells, many rows, many columns). Therefore, puzzles can be divided up into many small semi-independent problems with shared memory (by line or by cell). However, there is unlikely to be much use for SIMD parallelism. As such, it may be useful to try it on a processor like a Xeon Phi which has a large number of independent processors but better performance with divergent execution.
+
+### Languages
+C++: Fast, with good library support.
+CUDA: for GPU utilization
 
 ## Schedule
 
+12 Nov: Working solver
+19 Nov: Working parallel solver with significant speedups on lookahead solving
+26 Nov: Derive heuristics
+3 Dec: Implement heuristics
+10 Dec: Optimize for parallelism, take benchmarks
+15 Dec: Final report due
 
