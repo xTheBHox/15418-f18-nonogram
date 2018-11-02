@@ -5,7 +5,8 @@ Benjamin Huang (zemingbh) and Eric Sun (ehsun)
 ## Summary
 
 This project aims to implement a fast parallel nonogram solver that scales to large puzzles and scales for puzzles with high ambiguity.
-We will also consider the design of data structures tha facilitate parallelism for such an application.
+
+We will also consider the design of data structures that facilitate parallelism for such an application.
 
 ## Background
 
@@ -30,13 +31,13 @@ We will not be able to determine the entire row, but only the following cells:
 
 ``10 1 1 |.|.|X|X|X|X|X|X|.|.|.|.|.|.|.|.|``
 
-This can be derived since the last two single shaded cells must have two unshaded cells before them, which restricts the first contiguous 10-region to within the first 12 cells. Thus, the 3rd to the 10th cell in the row will definitely be shaded as part of the 10-region. Howveer, we cannot make any other conclusions about the rest of the cells in the row without looking at the rest of the puzzle.
+This can be derived since the last two single shaded cells must have two unshaded cells before them, which restricts the first contiguous 10-region to within the first 12 cells. Thus, the 3rd to the 10th cell in the row will definitely be shaded as part of the 10-region. However, we cannot make any other conclusions about the rest of the cells in the row without looking at the rest of the puzzle.
 
 Another example row is given below:
 
 ``2 4 |.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|``
 
-We cannot determine any shading by looking at this row in isolation, since the possible positions of both the 2- and 4-region do not all interesct at any cells. However, if we determine from other parts of the puzzle that the 3rd cell is shaded,
+We cannot determine any shading by looking at this row in isolation, since the possible positions of both the 2- and 4-region do not all intersect at any cells. However, if we determine from other parts of the puzzle that the 3rd cell is shaded,
 
 ``2 4 |.|.|X|.|.|.|.|.|.|.|.|.|.|.|.|.|``
 
@@ -94,7 +95,7 @@ Scale well with size (linear/linearithmic)
 Some speedup with number of processors for larger puzzles
 
 #### High-ambiguity puzzles
-Very good speedup with numner of processors
+Very good speedup with number of processors
 
 Some scaling with size
 
@@ -115,7 +116,7 @@ Extend to other logic puzzles (Slitherlink, etc.)
 
 ### Machine
 
-Using a GPU or a heterogenous configuration is suitable because the problem inherently has many small parts (many cells, many rows, many columns). Therefore, puzzles can be divided up into many small semi-independent problems with shared memory (by line or by cell). However, there is unlikely to be much use for SIMD parallelism. As such, it may be useful to try it on a processor like a Xeon Phi which has a large number of independent processors but better performance with divergent execution.
+Using a GPU or a heterogeneous configuration is suitable because the problem inherently has many small parts (many cells, many rows, many columns). Therefore, puzzles can be divided up into many small semi-independent problems with shared memory (by line or by cell). However, there is unlikely to be much use for SIMD parallelism. As such, it may be useful to try it on a processor like a Xeon Phi which has a large number of independent processors but better performance with divergent execution.
 
 ### Languages
 C++: Fast, with good library support.
