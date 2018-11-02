@@ -5,7 +5,8 @@ Benjamin Huang (zemingbh) and Eric Sun (ehsun)
 ## Summary
 
 This project aims to implement a fast parallel nonogram solver that scales to large puzzles and scales for puzzles with high ambiguity.
-We will also consider the design of data structures tha facilitate parallelism for such an application.
+
+We will also consider the design of data structures that facilitate parallelism for such an application.
 
 ## Background
 
@@ -30,13 +31,13 @@ We will not be able to determine the entire row, but only the following cells:
 
 ``10 1 1 |.|.|X|X|X|X|X|X|.|.|.|.|.|.|.|.|``
 
-This can be derived since the last two single shaded cells must have two unshaded cells before them, which restricts the first contiguous 10-region to within the first 12 cells. Thus, the 3rd to the 10th cell in the row will definitely be shaded as part of the 10-region. Howveer, we cannot make any other conclusions about the rest of the cells in the row without looking at the rest of the puzzle.
+This can be derived since the last two single shaded cells must have two unshaded cells before them, which restricts the first contiguous 10-region to within the first 12 cells. Thus, the 3rd to the 10th cell in the row will definitely be shaded as part of the 10-region. However, we cannot make any other conclusions about the rest of the cells in the row without looking at the rest of the puzzle.
 
 Another example row is given below:
 
 ``2 4 |.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|``
 
-We cannot determine any shading by looking at this row in isolation, since the possible positions of both the 2- and 4-region do not all interesct at any cells. However, if we determine from other parts of the puzzle that the 3rd cell is shaded,
+We cannot determine any shading by looking at this row in isolation, since the possible positions of both the 2- and 4-region do not all intersect at any cells. However, if we determine from other parts of the puzzle that the 3rd cell is shaded,
 
 ``2 4 |.|.|X|.|.|.|.|.|.|.|.|.|.|.|.|.|``
 
@@ -54,11 +55,19 @@ With regard to parallelism, it is likely that three areas of the problem will be
 
 ### Simple solving
 
-In simple solving, we have a single shared state. Since each line can be solved with only the data in the line, we can parallelize this by line with some form of synchronization between rows and columns (which share data).
+Simple solving is a set of strategies similar to the ones described in the background above, where certain cells in a row or column can be determined to be filled or not based solely on the rest of that row or column. For these strategies we can parallelize by row or column, and use shared memory.
+
+Note that if using shared memory, we cannot operate on rows and columns simultaneously. We either have to introduce some synchronization between solving rows and then solving columns, or use one block of shared memory for each and do some reconciliation at the end of each iteration.
+
+Some puzzles can be solved by doing iterations of simple solving techniques until each row and column satisfies the constraints. It will be most efficient to use simple solving techniques in the first phase of our parallel implementation because they can greatly reduce the search space of each puzzle.
 
 ### Lookahead solving
 
-In lookahead solving, the solver essentially explores a tree of possible future states based on an assumptions made in the current state. Simple solving is required when traversing to a future state. This provides two axes of parallelism: simple solving within each branch and testing different assumptions in parallel. Since exploring different assumptions will likely lead to contradictions in drastically varying amounts of time, some sort of dynamic scheduling will be required. It is also likely that different branches of the tree merge at future times since different assumptions can lead to the same state, and efficient communication between threads will be required to determine if and when this happens in order to avoid redundant work.
+Lookahead solving is a strategy that involves making an assumption in the current state, and exploring the tree of future states that result from that assumption. The goal is to prune that tree by finding states with contradictions. Every time an assumption is made, simple solving techniques will be used to either find a contradiction in the resulting state and invalidate the assumption (or in other words, validate the opposite), or get to a new state where more assumptions must be made.
+
+Thus we have two axes of parallelism: simple solving within each branch and testing different assumptions in parallel. Since exploring different assumptions will likely lead to contradictions in drastically varying amounts of time, some sort of dynamic scheduling will be required.
+
+It is also likely that different branches of the tree merge at future times since different assumptions can lead to the same state, and efficient communication between threads will be required to determine if and when this happens in order to avoid redundant work. In a sequential solver, dynamic programming could be used to find common subproblems, and it's likely a similar approach could work here.
 
 ### Heuristics
 
@@ -77,41 +86,52 @@ http://www.andrew.cmu.edu/user/marjorie/parallelpbn/parallelpbn.html (S15, OpenM
 
 ## Goals / Deliverables
 
-### Solver implementation
-#### Low-ambiguity puzzles
-Fast (good constants)
+### Implementations
 
-Scale well with size (linear/linearithmic)
+#### 1. Serial Implementation
+- Able to solve puzzles correctly, implementing simple solving techniques and lookahead solving.
+- Does not necessarily implement any heuristics for lookahead solving.
+- Does not scale well with puzzle size.
+- Does not scale well with puzzle ambiguity.
 
-Some speedup with number of processors for larger puzzles
+#### 2. Parallel Implementation
+- Able to solve puzzles correctly, implementing simple solving techniques parallelized across rows and columns, and lookahead solving parallelized across assumptions.
+- Does not necessarily implement any heuristics for lookahead solving.
+- Scales well with puzzle size.
+- Scales somewhat well with puzzle ambiguity.
 
-#### High-ambiguity puzzles
-Very good speedup with numner of processors
+#### 3. Good Parallel Implementation
+- Able to solve puzzles correctly, implementing simple solving techniques parallelized across rows and columns, and lookahead solving parallelized across assumptions.
+- Implements heuristics for lookahead solving.
+- Scales well with puzzle size.
+- Scales well with puzzle ambiguity.
 
-Some scaling with size
+### Other Deliverables
 
-### Theoretical
-Parallelizable heuristics with theoretical foundation
+#### Demo
+Animations of puzzles being solved and the steps taken by the solver for various puzzles.
 
-### Demo
-Show graphical animation of puzzle being solved (and the steps taken by the solver) on varying puzzles
+#### Speedup graphs
 
-Show speedup graphs
+Show speedup graphs for various puzzle sizes/ambiguities.
 
 ### Stretch goals
-Extend to Nonogram variants (additional colors, unordered constraints)
-
-Extend to other logic puzzles (Slitherlink, etc.)
+- Extend to Nonogram variants (additional colors, unordered constraints).
+- Extend to other logic puzzles (Slitherlink, etc.)
 
 ## Platform
 
 ### Machine
 
-Using a GPU or a heterogenous configuration is suitable because the problem inherently has many small parts (many cells, many rows, many columns). Therefore, puzzles can be divided up into many small semi-independent problems with shared memory (by line or by cell). However, there is unlikely to be much use for SIMD parallelism. As such, it may be useful to try it on a processor like a Xeon Phi which has a large number of independent processors but better performance with divergent execution.
+We believe GPUs are a good platform for this solver for a number of reasons. One is that, excluding heuristics (which will require us to do more research), the majority of the workload is using simple solving techniques to either find that a certain state has a contradiction somewhere down the line, or that it can be brought to a different state that requires assumptions to be made.
+
+All of the simple solving techniques can be run in parallel by row and column (as described above). Because the same methods will be employed across each row and column, there is the potential for SIMD parallelism to be useful. Additionally, puzzles are small and can take advantage of thread block shared memory, which in GPUs is significantly faster than global memory. Finally, the small size of each puzzle means that they can be copied in and out of memory extremely quickly.
+
+Finally, it may be useful to try writing our solver to run on a processor like a Xeon Phi which has a large number of independent processors but better performance with divergent execution.
 
 ### Languages
-C++: Fast, with good library support.
-CUDA: for GPU utilization
+- C++: Fast, with good library support.
+- CUDA: for GPU utilization.
 
 ## Schedule
 
