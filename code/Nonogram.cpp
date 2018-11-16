@@ -92,4 +92,74 @@ void NonogramLine::fill_all() {
 
 void NonogramLine::update() {
 
+    // Walk down the line, and fill in the run structures
+    unsigned ri0 = 0; // The minimum index black run we could be in
+    unsigned ri1 = 0; // The maximum index black run we could be in
+
+    // Walk
+    unsigned i = b_runs[0].topEnd - b_runs[0].len;
+    for (; i < len; i++) {
+
+        Nonogram::Color color = data[i];
+
+        // No information
+        if (color == Nonogram::Color::UNKNOWN) continue;
+
+        // Check if we are in a confirmed shaded region
+        if (b_runs[ri0].botStart < b_runs[ri0].topEnd) {
+            continue;
+        }
+
+        // Check if we are in a confirmed unshaded region
+        if (ri0 > ri1) continue;
+
+        // These are not fixed
+
+        // Try to fix
+        if (color == Nonogram::Color::BLACK) {
+            if (ri0 == ri1) { // Can fix
+
+                botStart_propagate(ri0, i);
+                topEnd_propagate(ri0, i + 1);
+
+            }
+        }
+
+        else { // if (color == Nonogram::Color::WHITE) {
+            if (i >= b_runs[ri0].botStart) {
+                botStart_propagate(ri0, i - b_runs[ri0].len);
+            }
+            if (i <= b_runs[ri1].topEnd) {
+                topEnd_propagate(ri1, i);
+            }
+
+        }
+
+        while (i >= b_runs[ri0].botStart + b_runs[ri0].len) ri0++;
+        while (ri1 + 1 < b_runs.size() && i >= b_runs[ri1 + 1].topEnd - b_runs[ri1 + 1].len) ri1++;
+
+        if (ri0 == b_runs.size()) break;
+
+    }
+
+
+
+}
+
+void NonogramLine::botStart_propagate(unsigned ri, unsigned i) {
+    while (i < b_runs[ri].botStart) {
+        b_runs[ri].botStart = i;
+        if (ri == 0) break;
+        ri--;
+        i -= b_runs[ri].len + 1;
+    }
+}
+
+void NonogramLine::topEnd_propagate(unsigned ri, unsigned i) {
+    while (i > b_runs[ri].topEnd) {
+        b_runs[ri].topEnd = i;
+        ri++;
+        if (ri == b_runs.size()) break;
+        i += b_runs[ri].len + 1;
+    }
 }

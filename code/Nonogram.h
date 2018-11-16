@@ -90,13 +90,15 @@ public:
      * Updates the run structs by referencing the current state of the board.
      */
     void update();
+    void botStart_propagate(unsigned ri, unsigned i);
+    void topEnd_propagate(unsigned ri, unsigned i);
 
 private:
     Nonogram &ngram;
     const unsigned len;
     const bool line_is_row;
     const unsigned line_index;
-    const char *const data;
+    const Nonogram::Color *const data;
     std::vector<BRun> b_runs;
     std::vector<WRun> w_runs;
 };
