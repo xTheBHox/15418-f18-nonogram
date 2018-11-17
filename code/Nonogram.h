@@ -8,6 +8,9 @@
 #include <vector>
 #include "Board2D.h"
 
+class Nonogram;
+class NonogramLine;
+
 class Nonogram {
 public:
     enum Color : char {
@@ -16,7 +19,7 @@ public:
         BLACK = 1
     };
 
-    Nonogram(unsigned w, unsigned h) : board(w, h), row_constr(h), col_constr(w) { }
+    Nonogram(unsigned w, unsigned h) : board(w, h, UNKNOWN), row_constr(h), col_constr(w) { }
 
     /**
      * Sets a row constraint in the nonogram.
@@ -26,6 +29,7 @@ public:
      */
     bool row_constr_set(unsigned row, std::vector<unsigned> &&constr) {
         row_constr[row] = constr;
+        return true;
     }
 
     /**
@@ -36,6 +40,7 @@ public:
      */
     bool col_constr_set(unsigned col, std::vector<unsigned> &&constr) {
         col_constr[col] = constr;
+        return true;
     }
 
     /**
@@ -48,10 +53,25 @@ public:
      */
     bool cell_confirm(Color color, unsigned line_index, unsigned i, bool is_row);
 
+    unsigned w() const { return board.w; }
+    unsigned h() const { return board.h; }
+
+
+    void solve();
+    void line_init();
+
+    friend std::ostream &operator<<(std::ostream &os, Nonogram &N);
+
 private:
-    Board2D<char> board;
+    Board2D<Color> board;
     std::vector<std::vector<unsigned>> row_constr;
     std::vector<std::vector<unsigned>> col_constr;
+
+    // solver params
+    bool dirty;
+    std::vector<NonogramLine> row_solvers;
+    std::vector<NonogramLine> col_solvers;
+
 };
 
 /**
@@ -78,13 +98,18 @@ public:
     } WRun;
 
     NonogramLine(
-            Nonogram &_ngram, unsigned _len, const char *_data,
+            Nonogram *_ngram, unsigned _len, const Nonogram::Color *_data,
             unsigned _index, bool _is_row, const std::vector<unsigned> &constr);
 
     /**
      * Fills the straightforward cells into the board.
      */
     void fill_all();
+
+    /**
+     * Fills the straightforward cells into the board.
+     */
+    void fill_add();
 
     /**
      * Updates the run structs by referencing the current state of the board.
@@ -94,7 +119,7 @@ public:
     void topEnd_propagate(unsigned ri, unsigned i);
 
 private:
-    Nonogram &ngram;
+    Nonogram *ngram;
     const unsigned len;
     const bool line_is_row;
     const unsigned line_index;

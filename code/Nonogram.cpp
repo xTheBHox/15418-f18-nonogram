@@ -23,11 +23,64 @@ bool Nonogram::cell_confirm(Color color, unsigned line_index, unsigned i, bool i
     else
         board.elem_set(line_index, i, color);
 
+    dirty = true;
+
     return true;
 }
 
+void Nonogram::solve() {
+
+    line_init();
+
+    do {
+
+        dirty = false;
+
+        for (unsigned i = 0; i < row_solvers.size(); i++) {
+            row_solvers[i].update();
+            row_solvers[i].fill_add();
+        }
+
+        for (unsigned i = 0; i < col_solvers.size(); i++) {
+            col_solvers[i].update();
+            col_solvers[i].fill_add();
+        }
+
+    } while (dirty);
+
+}
+
+void Nonogram::line_init() {
+
+    for (unsigned i = 0; i < h(); i++) {
+        row_solvers.emplace_back(NonogramLine(this, w(), board.row_ptr_get(i), i, true, row_constr[i]));
+    }
+
+    for (unsigned i = 0; i < w(); i++) {
+        col_solvers.emplace_back(NonogramLine(this, h(), board.col_ptr_get(i), i, false, col_constr[i]));
+    }
+
+}
+
+std::ostream &operator<<(std::ostream &os, Nonogram &N) {
+
+    for (unsigned r = 0; r < N.h(); r++) {
+        for (unsigned c = 0; c < N.w(); c++) {
+            if (N.board.elem_get_rm(c, r) == Nonogram::Color::BLACK) {
+                os << '#';
+            }
+            else {
+                os << ' ';
+            }
+        }
+        os << std::endl;
+    }
+    return os;
+
+}
+
 NonogramLine::NonogramLine(
-        Nonogram &_ngram, unsigned _len, const char *_data,
+        Nonogram *_ngram, unsigned _len, const Nonogram::Color *_data,
         unsigned _index, bool _is_row, const std::vector<unsigned> &constr)
         : ngram(_ngram),
           len(_len),
@@ -69,7 +122,7 @@ NonogramLine::NonogramLine(
     // Fill in parameters for the white runs
 
     for (unsigned i = 1; i < w_runs.size() - 1; i += 2) {
-        w_runs = {b_runs[i].botStart - 1, b_runs[i - 1].topEnd + 1};
+        w_runs[i] = {b_runs[i].botStart - 1, b_runs[i - 1].topEnd + 1};
     }
 
 }
@@ -78,13 +131,31 @@ void NonogramLine::fill_all() {
 
     for (BRun r : b_runs) {
         for (unsigned i = r.botStart; i < r.topEnd; i++) {
-            ngram.cell_confirm(Nonogram::Color::BLACK, line_index, i, line_is_row);
+            ngram->cell_confirm(Nonogram::Color::BLACK, line_index, i, line_is_row);
         }
     }
 
     for (WRun r : w_runs) {
         for (unsigned i = r.botStart; i < r.topEnd; i++) {
-            ngram.cell_confirm(Nonogram::Color::WHITE, line_index, i, line_is_row);
+            ngram->cell_confirm(Nonogram::Color::WHITE, line_index, i, line_is_row);
+        }
+    }
+
+}
+
+void NonogramLine::fill_add() {
+
+    for (BRun r : b_runs) {
+        for (unsigned i = r.botStart; i < r.topEnd; i++) {
+            if (data[i] != Nonogram::Color::BLACK)
+            ngram->cell_confirm(Nonogram::Color::BLACK, line_index, i, line_is_row);
+        }
+    }
+
+    for (WRun r : w_runs) {
+        for (unsigned i = r.botStart; i < r.topEnd; i++) {
+            if (data[i] != Nonogram::Color::WHITE)
+            ngram->cell_confirm(Nonogram::Color::WHITE, line_index, i, line_is_row);
         }
     }
 
@@ -104,6 +175,11 @@ void NonogramLine::update() {
 
         // No information
         if (color == Nonogram::Color::UNKNOWN) continue;
+
+        while (i >= b_runs[ri0].botStart + b_runs[ri0].len) ri0++;
+        while (ri1 + 1 < b_runs.size() && i >= b_runs[ri1 + 1].topEnd - b_runs[ri1 + 1].len) ri1++;
+
+        if (ri0 == b_runs.size()) break;
 
         // Check if we are in a confirmed shaded region
         if (b_runs[ri0].botStart < b_runs[ri0].topEnd) {
@@ -135,14 +211,7 @@ void NonogramLine::update() {
 
         }
 
-        while (i >= b_runs[ri0].botStart + b_runs[ri0].len) ri0++;
-        while (ri1 + 1 < b_runs.size() && i >= b_runs[ri1 + 1].topEnd - b_runs[ri1 + 1].len) ri1++;
-
-        if (ri0 == b_runs.size()) break;
-
     }
-
-
 
 }
 

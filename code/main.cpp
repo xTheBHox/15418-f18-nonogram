@@ -10,15 +10,19 @@
 Nonogram *parse_input_file_mk(std::string fInput) {
 
     std::fstream F;
-
     F.open(fInput);
+    if (!F) {
+        return nullptr;
+    }
 
     std::string line;
     unsigned w, h, n;
 
     std::getline(F, line);
     std::istringstream iss(line);
-    iss >> h >> w;
+    if (!(iss >> h >> w)) {
+        return nullptr;
+    }
 
     // Make a new Nonogram
     Nonogram *puzzle = new Nonogram(w, h);
@@ -67,7 +71,9 @@ int main(int argc, char **argv) {
     }
 
     if (P == nullptr) return -1;
+    P->solve();
 
+    std::cout << *P;
     // Cleanup
     delete P;
 
