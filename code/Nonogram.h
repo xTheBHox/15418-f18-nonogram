@@ -8,7 +8,8 @@
 #include <vector>
 #include "Board2D.h"
 
-#define DEBUG
+// Uncomment this to enforce checks.
+// #define DEBUG
 
 class Nonogram;
 class NonogramLine;
@@ -60,11 +61,17 @@ public:
 
 
     void solve();
+
+    /**
+     * Initializes the solver for each line.
+     */
     void line_init();
 
     friend std::ostream &operator<<(std::ostream &os, Nonogram &N);
 
-    // solver params
+    // Solver parameters
+
+    // This indicates the board has been modified.
     bool dirty;
 
 private:
@@ -72,7 +79,8 @@ private:
     std::vector<std::vector<unsigned>> row_constr;
     std::vector<std::vector<unsigned>> col_constr;
 
-    // solver params
+    // Solver parameters
+
     std::vector<NonogramLine> row_solvers;
     std::vector<NonogramLine> col_solvers;
 
@@ -106,23 +114,41 @@ public:
             unsigned _index, bool _is_row, const std::vector<unsigned> &constr);
 
     /**
-     * Fills the straightforward cells into the board.
+     * Updates the line based on any changes since the last run.
      */
-    void fill_all();
-
-    /**
-     * Fills the straightforward cells into the board.
-     */
-    void fill_add();
-
-    /**
-     * Updates the run structs by referencing the current state of the board.
-     */
-    void runs_update();
     void update();
+
+    /**
+    * Fills the cells which the runs have confirmed.
+    */
+    void runs_fill();
+
+    /**
+     * Fills in white cells around a max size block.
+     * @param i the ending index of the block
+     * @param curr_bblock_len the length of the block
+     */
     void block_max_size_fill(unsigned i, unsigned curr_bblock_len);
+
+    /**
+     * Propagates a change to the bottommost position of a run to the rest of the runs.
+     * @param ri the run index of the run to be changed.
+     * @param i the position to change to.
+     */
     void botStart_propagate(unsigned ri, unsigned i);
+
+    /**
+     * Propagates a change to the topmost position of a run to the rest of the runs.
+     * @param ri the run index of the run to be changed.
+     * @param i the position to change to.
+     */
     void topEnd_propagate(unsigned ri, unsigned i);
+
+    /**
+     * Sets a cell, making sure not to dirty the board if no changes are made.
+     * @param color the color to set
+     * @param i the cell position to set
+     */
     void cell_solve(Nonogram::Color color, unsigned i);
 
 private:
@@ -132,7 +158,6 @@ private:
     const unsigned line_index;
     const Nonogram::Color *const data;
     std::vector<BRun> b_runs;
-    std::vector<WRun> w_runs;
 };
 
 

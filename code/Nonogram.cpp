@@ -40,12 +40,12 @@ void Nonogram::solve() {
 
         for (unsigned i = 0; i < row_solvers.size(); i++) {
             row_solvers[i].update();
-            row_solvers[i].fill_add();
+            row_solvers[i].runs_fill();
         }
 
         for (unsigned i = 0; i < col_solvers.size(); i++) {
             col_solvers[i].update();
-            col_solvers[i].fill_add();
+            col_solvers[i].runs_fill();
         }
 
     } while (dirty);
@@ -101,10 +101,8 @@ NonogramLine::NonogramLine(
           data(_data) {
 
     b_runs = std::vector<BRun>(constr.size());
-    w_runs = std::vector<WRun>(constr.size() + 1);
 
     if (constr.empty()) {
-        w_runs[0] = {0, len};
         return;
     }
 
@@ -118,8 +116,6 @@ NonogramLine::NonogramLine(
         topSum++;
     }
 
-    w_runs.back() = {len, topSum - 1};
-
     // Find the bottommost line configuration for each run.
 
     unsigned botSum = len;
@@ -129,33 +125,9 @@ NonogramLine::NonogramLine(
         botSum--;
     }
 
-    w_runs.front() = {botSum + 1, 0};
-
-    // Fill in parameters for the white runs
-
-    for (unsigned i = 1; i < w_runs.size() - 1; i += 2) {
-        w_runs[i] = {b_runs[i].botStart - 1, b_runs[i - 1].topEnd + 1};
-    }
-
 }
 
-void NonogramLine::fill_all() {
-
-    for (BRun r : b_runs) {
-        for (unsigned i = r.botStart; i < r.topEnd; i++) {
-            ngram->cell_confirm(Nonogram::Color::BLACK, line_index, i, line_is_row);
-        }
-    }
-
-    for (WRun r : w_runs) {
-        for (unsigned i = r.botStart; i < r.topEnd; i++) {
-            ngram->cell_confirm(Nonogram::Color::WHITE, line_index, i, line_is_row);
-        }
-    }
-
-}
-
-void NonogramLine::fill_add() {
+void NonogramLine::runs_fill() {
 
     unsigned prev_wrun_botStart = 0;
 
@@ -181,65 +153,9 @@ void NonogramLine::fill_add() {
 
 }
 
-void NonogramLine::runs_update() {
-
-    // Walk down the line, and fill in the run structures
-    unsigned ri0 = 0; // The minimum index black run we could be in
-    unsigned ri1 = 0; // The maximum index black run we could be in
-
-    // Walk
-    unsigned i = b_runs[0].topEnd - b_runs[0].len;
-    for (; i < len; i++) {
-
-        Nonogram::Color color = data[i];
-
-        // No information
-        if (color == Nonogram::Color::UNKNOWN) {
-            continue;
-        }
-
-        while (i >= b_runs[ri0].botStart + b_runs[ri0].len) ri0++;
-        while (ri1 + 1 < b_runs.size() && i >= b_runs[ri1 + 1].topEnd - b_runs[ri1 + 1].len) ri1++;
-
-        if (ri0 == b_runs.size()) {
-            // We have finished all the shaded regions
-            break;
-        }
-
-        // Check if we are in an already confirmed shaded region
-        if (b_runs[ri0].botStart < b_runs[ri0].topEnd) {
-            continue;
-        }
-
-        // Check if we are in an already confirmed unshaded region
-        if (ri0 > ri1) continue;
-
-        // If we get here, we have a determined cell that has not been assigned to a run.
-
-        // Try to assign to a run.
-        if (color == Nonogram::Color::BLACK) {
-            if (ri0 == ri1) { // Can fix
-
-                botStart_propagate(ri0, i);
-                topEnd_propagate(ri0, i + 1);
-
-            }
-        }
-        else { // if (color == Nonogram::Color::WHITE) {
-            if (i >= b_runs[ri0].botStart) {
-                botStart_propagate(ri0, i - b_runs[ri0].len);
-            }
-            if (i <= b_runs[ri1].topEnd) {
-                topEnd_propagate(ri1, i);
-            }
-
-        }
-
-    }
-
-}
-
 void NonogramLine::update() {
+
+    if (b_runs.empty()) return;
 
     // Walk down the line, and fill in the run structures
     unsigned ri0 = 0; // The minimum index black run we could be in
@@ -251,7 +167,6 @@ void NonogramLine::update() {
     // Walk
     unsigned i = b_runs[0].topEnd - b_runs[0].len;
     for (; i < len; i++) {
-
 
         Nonogram::Color color = data[i];
         if (color == Nonogram::Color::BLACK) {
