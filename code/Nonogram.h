@@ -8,6 +8,8 @@
 #include <vector>
 #include "Board2D.h"
 
+#define DEBUG
+
 class Nonogram;
 class NonogramLine;
 
@@ -62,13 +64,15 @@ public:
 
     friend std::ostream &operator<<(std::ostream &os, Nonogram &N);
 
+    // solver params
+    bool dirty;
+
 private:
     Board2D<Color> board;
     std::vector<std::vector<unsigned>> row_constr;
     std::vector<std::vector<unsigned>> col_constr;
 
     // solver params
-    bool dirty;
     std::vector<NonogramLine> row_solvers;
     std::vector<NonogramLine> col_solvers;
 
@@ -114,9 +118,12 @@ public:
     /**
      * Updates the run structs by referencing the current state of the board.
      */
+    void runs_update();
     void update();
+    void block_max_size_fill(unsigned i, unsigned curr_bblock_len);
     void botStart_propagate(unsigned ri, unsigned i);
     void topEnd_propagate(unsigned ri, unsigned i);
+    void cell_solve(Nonogram::Color color, unsigned i);
 
 private:
     Nonogram *ngram;
