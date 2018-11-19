@@ -30,6 +30,36 @@ bool Nonogram::cell_confirm(Color color, unsigned line_index, unsigned i, bool i
     return true;
 }
 
+bool Nonogram::cell_check_confirm(Color color, unsigned line_index, unsigned i, bool is_row) {
+
+#ifdef DEBUG
+    if (is_row) {
+        if (board.elem_get_rm(i, line_index) != UNKNOWN && board.elem_get_rm(i, line_index) != color) {
+            std::cerr << __func__ << ": Overwrite" << std::endl;
+            return false;
+        }
+    }
+    else {
+        if (board.elem_get_cm(line_index, i) != UNKNOWN && board.elem_get_cm(line_index, i) != color) {
+            std::cerr << __func__ << ": Overwrite" << std::endl;
+            return false;
+        }
+    }
+#endif
+    dirty = true;
+
+    if (is_row) {
+        if (board.elem_get_rm(i, line_index) != UNKNOWN && board.elem_get_rm(i, line_index) != color) return false;
+        board.elem_set(i, line_index, color);
+    }
+    else {
+        if (board.elem_get_cm(line_index, i) != UNKNOWN && board.elem_get_cm(line_index, i) != color) return false;
+        board.elem_set(line_index, i, color);
+    }
+
+    return true;
+}
+
 void Nonogram::solve() {
 
     line_init();

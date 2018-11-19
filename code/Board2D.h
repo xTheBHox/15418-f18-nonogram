@@ -30,6 +30,8 @@ public:
     const E* row_ptr_get(unsigned index) const;
     const E* col_ptr_get(unsigned index) const;
 
+    friend void *board2d_to_device(Board2D B_host);
+
     // Board dimensions.
     const unsigned w;
     const unsigned h;

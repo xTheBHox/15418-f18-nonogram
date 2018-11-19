@@ -7,6 +7,7 @@
 
 #define BUFLEN 255
 
+
 Nonogram *parse_input_file_mk(std::string fInput) {
 
     std::fstream F;

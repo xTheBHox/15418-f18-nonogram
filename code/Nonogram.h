@@ -55,6 +55,7 @@ public:
      * @return true if successful, false otherwise
      */
     bool cell_confirm(Color color, unsigned line_index, unsigned i, bool is_row);
+    bool cell_check_confirm(Color color, unsigned line_index, unsigned i, bool is_row);
 
     unsigned w() const { return board.w; }
     unsigned h() const { return board.h; }
