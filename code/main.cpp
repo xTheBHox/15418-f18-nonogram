@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <vector>
 #include "Nonogram.h"
+#include "NonogramLineDevice.h"
 
 #define BUFLEN 255
 
@@ -72,7 +73,11 @@ int main(int argc, char **argv) {
     }
 
     if (P == nullptr) return -1;
+#ifdef __CUDACC__
+    ng_solve(P);
+#else
     P->solve();
+#endif
 
     std::cout << *P;
     // Cleanup

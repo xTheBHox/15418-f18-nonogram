@@ -31,6 +31,7 @@ public:
     const E* col_ptr_get(unsigned index) const;
 
     friend void *board2d_to_device(Board2D B_host);
+    friend void board2d_dev_to_host(void* B_dev_v, Board2D B_host);
 
     // Board dimensions.
     const unsigned w;

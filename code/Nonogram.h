@@ -60,8 +60,8 @@ public:
     unsigned w() const { return board.w; }
     unsigned h() const { return board.h; }
 
-
     void solve();
+    friend void ng_solve(Nonogram *N);
 
     /**
      * Initializes the solver for each line.
@@ -75,11 +75,11 @@ public:
     // This indicates the board has been modified.
     bool dirty;
 
-private:
     Board2D<Color> board;
     std::vector<std::vector<unsigned>> row_constr;
     std::vector<std::vector<unsigned>> col_constr;
 
+private:
     // Solver parameters
 
     std::vector<NonogramLine> row_solvers;
