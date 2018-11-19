@@ -24,3 +24,10 @@ Our solver is currently able to solve puzzles of easy and medium difficulty that
 
 ## Issues
 Right now we believing getting to our deliverables is just a matter of writing the code and doing the work. Our primary concern is finishing our set of high quality simple solvers. As mentioned above, actually making the code run in parallel will likely not be a particularly difficult task.
+
+## Revised calendar
+- 11/19: Working simple solver
+- 11/26: Working sequential solver with finished simple solvers and lookahead
+- 11/30: Working parallel solver with finished simple solvers and lookahead
+- 12/3: Working basic heuristics
+- 12/10: Optimized solver, benchmarks, working demo
