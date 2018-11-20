@@ -3,24 +3,24 @@
 //
 
 #include "NonogramLineDevice.h"
-#include "Board2DDevice.h"
 
 __host__
 void *ngline_dev_init_host(const unsigned *constr, unsigned constr_len) {
 
-    if (constr_len > MAX_RUNS) return;
+    if (constr_len > MAX_RUNS) return nullptr;
 
-    NonogramLineDevice *line_dev_v;
-    void *line_dev = (void *) line_dev_v;
-    cudaMalloc(&line_dev, sizeof(NonogramLineDevice));
+    void *line_dev_v;
+    cudaMalloc(&line_dev_v, sizeof(NonogramLineDevice));
+    
+    NonogramLineDevice *line_dev = (NonogramLineDevice *)line_dev_v;
 
-    void *line_dev_constr = (void *) line_dev_v->constr;
+    void *line_dev_constr = (void *) line_dev->constr;
     cudaMemcpy(line_dev_constr, constr, sizeof(unsigned) * constr_len, cudaMemcpyHostToDevice);
 
-    void *line_dev_constr_len = (void *) &line_dev_v->constr_len;
+    void *line_dev_constr_len = (void *) &line_dev->constr_len;
     cudaMemcpy(line_dev_constr_len, &constr_len, sizeof(unsigned), cudaMemcpyHostToDevice);
 
-    return line_dev;
+    return line_dev_v;
 
 }
 
@@ -96,7 +96,7 @@ void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B) {
     unsigned ri1 = 0; // The maximum index black run we could be in
 
     unsigned curr_bblock_len = 0;
-    unsigned first_nwi = 0;
+    // unsigned first_nwi = 0;
 
     // Walk
     unsigned i = L->b_runs[0].topEnd - L->constr[0];
@@ -108,7 +108,7 @@ void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B) {
         }
         else if (color == Nonogram::Color::WHITE) {
             curr_bblock_len = 0;
-            first_nwi = i + 1;
+            // first_nwi = i + 1;
         }
         else {
             curr_bblock_len = 0;
@@ -119,11 +119,11 @@ void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B) {
 
         unsigned max_run_len = 0;
         for (unsigned j = ri0; j <= ri1; j++) {
-            max_run_len = std::max(L->constr[j], max_run_len);
+            if (max_run_len < L->constr[j]) max_run_len = L->constr[j];
         }
         while (ri1 + 1 < L->constr_len && i >= L->b_runs[ri1 + 1].topEnd - L->constr[ri1 + 1]) {
             ri1++;
-            max_run_len = std::max(L->constr[ri1], max_run_len);
+            if (max_run_len < L->constr[ri1]) max_run_len = L->constr[ri1];
         }
 
         if (ri0 == L->constr_len) {
@@ -222,11 +222,6 @@ __device__
 NonogramLineDevice *ng_dev_get_ngline(Board2DDevice *B, NonogramLineDevice **Ls) {
 
     unsigned i = blockIdx.x;
-
-    NonogramLineDevice *L;
-    unsigned line_index, line_len;
-    bool line_is_row;
-    const char *line_data;
     if (i >= B->h) {
         return Ls[i - B->h];
     }
@@ -258,7 +253,6 @@ __global__
 void ngline_init_kernel(Board2DDevice *B, NonogramLineDevice **Ls) {
     unsigned i = blockIdx.x;
 
-    NonogramLineDevice *L;
     unsigned line_index, line_len;
     bool line_is_row;
     const char *line_data;
@@ -297,10 +291,10 @@ void ng_solve(Nonogram *N) {
         Ls_tmp[i + j] = (NonogramLineDevice *)ngline_dev_init_host(constr, constr_len);
     }
 
-    NonogramLineDevice **Ls;
-    cudaMalloc((void *)Ls, Ls_size);
-    cudaMemcpy((void *)Ls, Ls_tmp, Ls_size, cudaMemcpyHostToDevice);
-
+    void *Ls_tmpptr;
+    cudaMalloc(&Ls_tmpptr, Ls_size);
+    cudaMemcpy(Ls_tmpptr, Ls_tmp, Ls_size, cudaMemcpyHostToDevice);
+    NonogramLineDevice **Ls = (NonogramLineDevice **)Ls_tmpptr;
     Board2DDevice *B = (Board2DDevice *)board2d_to_device(N->board);
 
     ngline_init_kernel<<<B->w + B->h, 1>>>(B, Ls);

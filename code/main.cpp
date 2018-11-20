@@ -31,7 +31,7 @@ Nonogram *parse_input_file_mk(std::string fInput) {
 
     for (unsigned r = 0; r < h; r++) {
         std::getline(F, line);
-        iss = std::istringstream(line);
+        iss.str(line);
         std::vector<unsigned> tmp_constr;
         while (iss >> n) {
             tmp_constr.push_back(n);
@@ -43,7 +43,7 @@ Nonogram *parse_input_file_mk(std::string fInput) {
 
     for (unsigned c = 0; c < w; c++) {
         std::getline(F, line);
-        iss = std::istringstream(line);
+        iss.str(line);
         std::vector<unsigned> tmp_constr;
         while (iss >> n) {
             tmp_constr.push_back(n);

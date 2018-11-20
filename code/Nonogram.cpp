@@ -98,7 +98,7 @@ std::ostream &operator<<(std::ostream &os, Nonogram &N) {
 
     for (unsigned r = 0; r < N.h(); r++) {
         for (unsigned c = 0; c < N.w(); c++) {
-            char sym;
+            char sym = 'X';
             switch (N.board.elem_get_rm(c, r)) {
                 case Nonogram::Color::BLACK: {
                     sym = '#';
@@ -126,8 +126,8 @@ NonogramLine::NonogramLine(
         unsigned _index, bool _is_row, const std::vector<unsigned> &constr)
         : ngram(_ngram),
           len(_len),
-          line_index(_index),
           line_is_row(_is_row),
+          line_index(_index),
           data(_data) {
 
     b_runs = std::vector<BRun>(constr.size());
@@ -192,7 +192,7 @@ void NonogramLine::update() {
     unsigned ri1 = 0; // The maximum index black run we could be in
 
     unsigned curr_bblock_len = 0;
-    unsigned first_nwi = 0;
+    // unsigned first_nwi = 0;
 
     // Walk
     unsigned i = b_runs[0].topEnd - b_runs[0].len;
@@ -204,7 +204,7 @@ void NonogramLine::update() {
         }
         else if (color == Nonogram::Color::WHITE) {
             curr_bblock_len = 0;
-            first_nwi = i + 1;
+            // first_nwi = i + 1;
         }
         else {
             curr_bblock_len = 0;

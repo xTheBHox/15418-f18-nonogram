@@ -76,8 +76,8 @@ public:
     bool dirty;
 
     Board2D<Color> board;
-    std::vector<std::vector<unsigned>> row_constr;
-    std::vector<std::vector<unsigned>> col_constr;
+    std::vector< std::vector<unsigned> > row_constr;
+    std::vector< std::vector<unsigned> > col_constr;
 
 private:
     // Solver parameters
