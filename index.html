@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nonogram Solver</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css" integrity="sha256-l85OmPOjvil/SOvVt3HnSSjzF1TUMyT9eV0c2BzEGzU=" crossorigin="anonymous" />
+  <style>
+    html {
+      background-color: #ECEAE0;
+      color: #221E1D;
+    }
+
+    body {
+      max-width: 50rem;
+      margin: auto;
+      font-family: sans-serif;
+      padding: 2rem;
+    }
+
+    hr {
+      border: 2px solid #221E1D;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>
+      Nonogram Solver
+      (<a href="https://github.com/xTheBHox/15418-f18-nonogram/">github</a>)
+    </h1>
+    <h3>Benjamin Huang and Eric Sun</h3>
+  </div>
+  <hr>
+  <div id="toc">
+    <h1>Contents</h1>
+    <ol>
+      <li>
+        <a href="#propsal">Proposal</a> (10/31/18)
+      </li>
+      <li>
+        <a href="#checkpoint">Checkpoint report</a> (10/31/18)
+      </li>
+    </ol>
+  </div>
+  <hr>
+  <div id="propsal">
+    <h1>Proposal</h1>
+    <div class="section">
+      <h2>Summary</h2>
+      <p>
+        This project aims to implement a fast parallel <a href="https://en.wikipedia.org/wiki/Nonogram">nonogram</a>
+        solver that scales to large puzzles and scales for puzzles with high ambiguity.
+      </p>
+      <p>
+        We will also consider the design of data structures that facilitate parallelism for such an application.
+      </p>
+    </div>
+    <div class="section">
+      <h2>Background</h2>
+      <p>
+        Nonograms are a logic puzzle built around a rectangular grid divided into cells. The solver's objective is to determine, for each cell, whether the cell is shaded or not. The constraints on the shading of cells are given as number sequences on each row and column, indicating to the solver the number of contiguous regions of shaded cells in that line (row or column) and the number of shaded cells in each contiguous region.
+      </p>
+      <p>
+        Generally, given a single row and column, a solver would be able to determine the result in some of the cells. For a simple example, given such a row on a 16 column board:
+      </p>
+      <p><code>
+        10 2 2 |.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|
+      </code></p>
+      <p>
+        This indicates that there will be a contiguous region of 10 shaded cells, then 2 shaded cells, then 2 shaded cells.
+      </p>
+      <p>
+        Since there is at least one unshaded cell between each contiguous region, we can determine the following cells are shaded and not shaded:
+      </p>
+      <p><code>
+        10 2 2 |X|X|X|X|X|X|X|X|X|X| |X|X| |X|X|
+      </code></p>
+      <p>
+        Suppose we have the following row instead:
+      </p>
+      <p><code>
+        10 1 1 |.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|
+      </code></p>
+      <p>
+        We will not be able to determine the entire row, but only the following cells:
+      </p>
+      <p><code>
+        10 1 1 |.|.|X|X|X|X|X|X|.|.|.|.|.|.|.|.|
+      </code></p>
+      <p>
+        This can be derived since the last two single shaded cells must have two unshaded cells before them, which restricts the first contiguous 10-region to within the first 12 cells. Thus, the 3rd to the 10th cell in the row will definitely be shaded as part of the 10-region. However, we cannot make any other conclusions about the rest of the cells in the row without looking at the rest of the puzzle.
+      </p>
+      <p>
+        Another example row is given below:
+      </p>
+      <p><code>
+        2 4 |.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|
+      </code></p>
+      <p>
+        We cannot determine any shading by looking at this row in isolation, since the possible positions of both the 2- and 4-region do not all intersect at any cells. However, if we determine from other parts of the puzzle that the 3rd cell is shaded as so:
+      </p>
+      <p><code>
+        2 4 |.|.|X|.|.|.|.|.|.|.|.|.|.|.|.|.|
+      </code></p>
+      <p>
+        Then we can also determine that the first cell is unshaded. This is because if the first cell was shaded our 2-region would touch the 3rd cell and not be valid:
+      </p>
+      <p><code>
+        2 4 | |.|X|.|.|.|.|.|.|.|.|.|.|.|.|.|
+      </code></p>
+      <p>
+        In some cases the entire puzzle will not have any rows and columns that can be solved from the current state, and the solver is required to proceed via an assumption. Since puzzles have a single solution, the solver either arrives at a contradiction in which case the initial assumption is determined to be false, or the solver solves the puzzle (possibly via further assumptions). A state where an assumption is required to proceed is said to be an *ambiguous* state. Generally, the more ambiguous states a puzzle has, the more difficult it is to solve.
+      </p>
+    </div>
+    <div class="section">
+      <h2>Challenge</h2>
+      <p>
+        Nonograms are interesting because they are not a particularly mainstream type of logic puzzle, which means existing research is scarcer,  and are not obviously reducible to other problems. There are also much fewer existing implementations of solvers.
+      </p>
+      <p>
+        With regard to parallelism, it is likely that three areas of the problem will be parallelized: <strong>simple solving</strong>, <strong>lookahead solving</strong>, and <strong>heuristics</strong>.
+      </p>
+      <h4>Simple solving</h4>
+      <p>
+        Simple solving is a set of strategies similar to the ones described in the background above, where certain cells in a row or column can be determined to be filled or not based solely on the rest of that row or column. For these strategies we can parallelize by row or column, and use shared memory.
+      </p>
+      <p>
+        Note that if using shared memory, we cannot operate on rows and columns simultaneously. We either have to introduce some synchronization between solving rows and then solving columns, or use one block of shared memory for each and do some reconciliation at the end of each iteration.
+      </p>
+      <p>
+        Some puzzles can be solved by doing iterations of simple solving techniques until each row and column satisfies the constraints. It will be most efficient to use simple solving techniques in the first phase of our parallel implementation because they can greatly reduce the search space of each puzzle.
+      </p>
+      <h4>Lookahead solving</h4>
+      <p>
+        Lookahead solving is a strategy that involves making an assumption in the current state, and exploring the tree of future states that result from that assumption. The goal is to prune that tree by finding states with contradictions. Every time an assumption is made, simple solving techniques will be used to either find a contradiction in the resulting state and invalidate the assumption (or in other words, validate the opposite), or get to a new state where more assumptions must be made.
+      </p>
+      <p>
+        Thus we have two axes of parallelism: simple solving within each branch and testing different assumptions in parallel. Since exploring different assumptions will likely lead to contradictions in drastically varying amounts of time, some sort of dynamic scheduling will be required.
+      </p>
+      <p>
+        It is also likely that different branches of the tree merge at future times since different assumptions can lead to the same state, and efficient communication between threads will be required to determine if and when this happens in order to avoid redundant work. In a sequential solver, dynamic programming could be used to find common subproblems, and it's likely a similar approach could work here.
+      </p>
+      <h4>Heuristics</h4>
+      <p>
+        In particular, ambiguous states are difficult for solvers because there is very little per-cell heuristic on which assumptions are likely to cause a contradiction or likely to be part of the solution. Ideally, the solver would pick an assumption that will quickly lead to a contradiction to reduce time spent computing states that are not part of the solution. Determining which assumption of all possible assumptions is non-trivial to determine and relies on heuristics.
+      </p>
+      <p>
+        As such, the challenge will be to find a heuristic that lends itself well to parallelism. Here, we distinguish heuristics from lookahead solving by defining heuristics as computation involving only the current board state and no future board states.
+      </p>
+      <p>
+        It is likely that heuristics will involve data structures other than a boolean array representation of the board, and these data structures will also have to be optimized for parallel computation.
+      </p>
+    </div>
+    <div class="section">
+      <h2>Resources</h2>
+      <p>
+        There have been two past projects on Nonograms and a number of past projects on other logic puzzles (mainly Sudokus):
+      </p>
+      <ul>
+        <li>
+          <a href="https://github.com/seansxiao/nonogram-solver">nonogram-solver</a> (S17, using CPU, only naive heuristics)
+        </li>
+        <li>
+          <a href="http://www.andrew.cmu.edu/user/marjorie/parallelpbn/parallelpbn.html">parallelpbn</a> (S15, OpenMP, poor parallel speedup)
+        </li>
+      </ul>
+    </div>
+    <div class="section">
+      <h2>Goals/deliverables</h2>
+      <h4>Implementations</h4>
+      <p>
+        Serial implementation:
+      </p>
+      <ul>
+        <li>
+          Able to solve puzzles correctly, implementing simple solving techniques and lookahead solving.
+        </li>
+        <li>
+          Does not necessarily implement any heuristics for lookahead solving.
+        </li>
+        <li>
+          Does not scale well with puzzle size.
+        </li>
+        <li>
+          Does not scale well with puzzle ambiguity.
+        </li>
+      </ul>
+      <p>
+        Parallel iplementation:
+      </p>
+      <ul>
+        <li>
+          Able to solve puzzles correctly, implementing simple solving techniques parallelized across rows and columns, and lookahead solving parallelized across assumptions.
+        </li>
+        <li>
+          Does not necessarily implement any heuristics for lookahead solving.
+        </li>
+        <li>
+          Scales well with puzzle size.
+        </li>
+        <li>
+          Scales somewhat well with puzzle ambiguity.
+        </li>
+      </ul>
+      <p>Good parallel implementation:</p>
+      <ul>
+        <li>
+          Able to solve puzzles correctly, implementing simple solving techniques parallelized across rows and columns, and lookahead solving parallelized across assumptions.
+        </li>
+        <li>
+          Implements heuristics for lookahead solving.
+        </li>
+        <li>
+          Scales well with puzzle size.
+        </li>
+        <li>
+          Scales well with puzzle ambiguity.
+        </li>
+      </ul>
+      <h4>Other deliverables</h4>
+      <p>Demo:</p>
+      <ul>
+        <li>
+          Animations of puzzles being solved and the steps taken by the solver for various puzzles.
+        </li>
+      </ul>
+      <p>Speedup graphs</p>
+      <ul>
+        <li>
+          Show speedup graphs for various puzzle sizes/ambiguities.
+        </li>
+      </ul>
+      <p>Stretch goals:</p>
+      <ul>
+        <li>
+          Extend to Nonogram variants (additional colors, unordered constraints).
+        </li>
+        <li>
+          Extend to other logic puzzles (Slitherlink, etc.)
+        </li>
+      </ul>
+    </div>
+    <div class="section">
+      <h2>Platform</h2>
+      <h4>Machine</h4>
+      <p>
+        We believe GPUs are a good platform for this solver for a number of reasons. One is that, excluding heuristics (which will require us to do more research), the majority of the workload is using simple solving techniques to either find that a certain state has a contradiction somewhere down the line, or that it can be brought to a different state that requires assumptions to be made.
+      </p>
+      <p>
+        All of the simple solving techniques can be run in parallel by row and column (as described above). Because the same methods will be employed across each row and column, there is the potential for SIMD parallelism to be useful. Additionally, puzzles are small and can take advantage of thread block shared memory, which in GPUs is significantly faster than global memory. Finally, the small size of each puzzle means that they can be copied in and out of memory extremely quickly.
+      </p>
+      <p>
+        Finally, it may be useful to try writing our solver to run on a processor like a Xeon Phi which has a large number of independent processors but better performance with divergent execution.
+      </p>
+      <h4>Languages</h4>
+      <ul>
+        <li>
+          C++: Fast, with good library support
+        </li>
+        <li>
+          CUDA: for GPU utilization
+        </li>
+      </ul>
+    </div>
+    <div class="section">
+      <h2>Schedule</h2>
+      <ul>
+        <li>
+          11/12: Working solver
+        </li>
+        <li>
+          11/19: Working parallel solver with significant speedups on lookahead solving
+        </li>
+        <li>
+          11/26: Derive heuristics
+        </li>
+        <li>
+          12/3: Implement heuristics
+        </li>
+        <li>
+          12/10: Optimize for parallelism, take benchmarks
+        </li>
+        <li>
+          12/15: Final report due
+        </li>
+      </ul>
+    </div>
+  </div>
+  <hr>
+  <div id="checkpoint">
+    <h1>Checkpoint</h1>
+    <div class="section">
+      <h2>Progress</h2>
+      <p>
+        Right now we're wrapping up work on the sequential solver. As described in the original project writeup, sequential solving can be roughly divided into two stages: simple solving and lookahead solving. We're currently nearing the end of implementing of simple solving strategies, and coming to the implementation of lookahead solving. Lookahead solving is by far the easier of the two; it boils down to a breadth or depth-first search of the tree of board possibilities. At the moment our solver is capable of solving puzzles that don't involve any guesswork.
+      </p>
+      <p>
+        Once we implement lookahead solving we can begin adding parallelism. In this case, the key to a good parallel implementation will be writing good simple solvers and designing data structures that allow for efficient access. Actually running the code on a GPU will largely involve turning the individual line solvers into kernels and moving the board data into shared memory.
+      </p>
+    </div>
+    <div class="section">
+      <h2>Revised goals</h2>
+      <p>
+        In our initial proposal we outlined three levels of implementation: serial, parallel, and good parallel. Given our current progress we believe we will still get through at least the parallel implementation, and hopefully be able to implement some basic heuristics. We also still believe we will have the demo and speedup graphs.
+      </p>
+      <p>
+        It is still possible but unlikely that we will be able to implement our stretch goals for other Nonogram variants, and additional types of puzzles.
+      </p>
+      <p>
+        Our revised poster session goal is a working parallel solver that implements at least one heuristic for lookahead solving. It should be able to read puzzles from disk, solve them, and write the answers back. Ideally we could also add some nice visualization as well.
+      </p>
+    </div>
+    <div class="section">
+      <h2>Poster session details</h2>
+      <p>
+        There are three deliverables we'd like to have for the poster session. One is the working solver mentioned above. Additionally, we want to have:
+      </p>
+      <ol>
+        <li>
+          Speedup graphs for puzzles of various sizes/ambiguities
+        </li>
+        <li>
+          Either a video or live demo of the solver working on a puzzle
+        </li>
+      </ol>
+    </div>
+    <div class="section">
+      <h2>Preliminary results</h2>
+      <p>
+        Our solver is currently able to solve puzzles of easy and medium difficulty that do not involve any guessing.
+      </p>
+    </div>
+    <div class="section">
+      <h2>Issues</h2>
+      <p>
+        Right now we believing getting to our deliverables is just a matter of writing the code and doing the work. Our primary concern is finishing our set of high quality simple solvers. As mentioned above, actually making the code run in parallel will likely not be a particularly difficult task.
+      </p>
+    </div>
+    <div class="section">
+      <h2>Revised calendar</h2>
+      <ul>
+        <li>
+          11/19: Working simple solver
+        </li>
+        <li>
+          11/26: Working sequential solver with finished simple solvers and lookahead
+        </li>
+        <li>
+          11/30: Working parallel solver with finished simple solvers and lookahead
+        </li>
+        <li>
+          12/3: Working basic heuristics
+        </li>
+        <li>
+          12/10: Optimized solver, benchmarks, working demo
+        </li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
