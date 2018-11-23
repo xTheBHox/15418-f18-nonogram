@@ -5,7 +5,7 @@
 #include "Board2DDevice.h"
 
 __host__
-void *board2d_to_device(Board2D<Nonogram::Color> B_host) {
+void *board2d_to_device(Board2D<NonogramColor> B_host) {
 
     Board2DDevice tmp;
     tmp.w = B_host.w;
@@ -28,7 +28,7 @@ void *board2d_to_device(Board2D<Nonogram::Color> B_host) {
 }
 
 __host__
-void board2d_dev_to_host(void* B_dev_v, Board2D<Nonogram::Color> B_host) {
+void board2d_dev_to_host(void* B_dev_v, Board2D<NonogramColor> B_host) {
     Board2DDevice *B_dev = (Board2DDevice *)B_dev_v;
 
     if (B_dev->w != B_host.w || B_dev->h != B_host.h) {

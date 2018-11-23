@@ -5,6 +5,7 @@
 #ifndef CODE_NONOGRAMLINEDEVICE_H
 #define CODE_NONOGRAMLINEDEVICE_H
 
+#include "NonogramColor.h"
 #include "Board2DDevice.h"
 #include "Nonogram.h"
 

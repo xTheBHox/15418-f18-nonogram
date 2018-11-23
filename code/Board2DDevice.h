@@ -282,6 +282,7 @@ extern uint3 threadIdx;
 extern int warpsize;
 #endif
 
+#include "NonogramColor.h"
 #include "Board2D.h"
 #include "Nonogram.h"
 
@@ -295,8 +296,8 @@ typedef struct {
 
 } Board2DDevice;
 
-void *board2d_to_device(Board2D<Nonogram::Color> B_host);
-void board2d_dev_to_host(void* B_dev_v, Board2D<Nonogram::Color> B_host);
+void *board2d_to_device(Board2D<NonogramColor> B_host);
+void board2d_dev_to_host(void* B_dev_v, Board2D<NonogramColor> B_host);
 void board2d_dev_free(Board2DDevice *B);
 __device__ void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, char val);
 __device__ char board2d_dev_elem_get_rm(Board2DDevice *B, unsigned x, unsigned y);

@@ -67,12 +67,12 @@ void ngline_dev_runs_fill(NonogramLineDevice *L, Board2DDevice *B) {
         BRun r = L->b_runs[ri];
 
         while (r.topEnd - L->constr[ri] > prev_wrun_botStart) {
-            ngline_dev_cell_solve(L, B, Nonogram::Color::WHITE, prev_wrun_botStart);
+            ngline_dev_cell_solve(L, B, NonogramColor::WHITE, prev_wrun_botStart);
             prev_wrun_botStart++;
         }
 
         for (unsigned i = r.botStart; i < r.topEnd; i++) {
-            ngline_dev_cell_solve(L, B, Nonogram::Color::BLACK, i);
+            ngline_dev_cell_solve(L, B, NonogramColor::BLACK, i);
         }
 
         prev_wrun_botStart = r.botStart + L->constr[ri];
@@ -80,7 +80,7 @@ void ngline_dev_runs_fill(NonogramLineDevice *L, Board2DDevice *B) {
     }
 
     while (prev_wrun_botStart < L->len) {
-        ngline_dev_cell_solve(L, B, Nonogram::Color::WHITE, prev_wrun_botStart);
+        ngline_dev_cell_solve(L, B, NonogramColor::WHITE, prev_wrun_botStart);
         prev_wrun_botStart++;
     }
 
@@ -103,10 +103,10 @@ void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B) {
     for (; i < L->len; i++) {
 
         char color = L->data[i];
-        if (color == Nonogram::Color::BLACK) {
+        if (color == NonogramColor::BLACK) {
             curr_bblock_len++;
         }
-        else if (color == Nonogram::Color::WHITE) {
+        else if (color == NonogramColor::WHITE) {
             curr_bblock_len = 0;
             // first_nwi = i + 1;
         }
@@ -142,7 +142,7 @@ void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B) {
         // If we get here, we have a determined cell that has not been assigned to a run.
 
         // Try to assign to a run.
-        if (color == Nonogram::Color::BLACK) {
+        if (color == NonogramColor::BLACK) {
             if (ri0 == ri1) { // Can fix
 
                 ngline_dev_botStart_propagate(L, B, ri0, i);
@@ -171,10 +171,10 @@ __device__
 void ngline_dev_block_max_size_fill(NonogramLineDevice *L, Board2DDevice *B,
                          unsigned i, unsigned curr_bblock_len) {
     if (i + 1 < L->len) {
-        ngline_dev_cell_solve(L, B, Nonogram::Color::WHITE, i + 1);
+        ngline_dev_cell_solve(L, B, NonogramColor::WHITE, i + 1);
     }
     if (i >= curr_bblock_len) {
-        ngline_dev_cell_solve(L, B, Nonogram::Color::WHITE, i - curr_bblock_len);
+        ngline_dev_cell_solve(L, B, NonogramColor::WHITE, i - curr_bblock_len);
     }
 
 }

@@ -4,7 +4,7 @@
 
 #include "Nonogram.h"
 
-bool Nonogram::cell_confirm(Color color, unsigned line_index, unsigned i, bool is_row) {
+bool Nonogram::cell_confirm(NonogramColor color, unsigned line_index, unsigned i, bool is_row) {
 
 #ifdef DEBUG
     if (is_row) {
@@ -30,7 +30,7 @@ bool Nonogram::cell_confirm(Color color, unsigned line_index, unsigned i, bool i
     return true;
 }
 
-bool Nonogram::cell_check_confirm(Color color, unsigned line_index, unsigned i, bool is_row) {
+bool Nonogram::cell_check_confirm(NonogramColor color, unsigned line_index, unsigned i, bool is_row) {
 
 #ifdef DEBUG
     if (is_row) {
@@ -100,15 +100,15 @@ std::ostream &operator<<(std::ostream &os, Nonogram &N) {
         for (unsigned c = 0; c < N.w(); c++) {
             char sym = 'X';
             switch (N.board.elem_get_rm(c, r)) {
-                case Nonogram::Color::BLACK: {
+                case NonogramColor::BLACK: {
                     sym = '#';
                     break;
                 }
-                case Nonogram::Color::UNKNOWN: {
+                case NonogramColor::UNKNOWN: {
                     sym = '?';
                     break;
                 }
-                case Nonogram::Color::WHITE: {
+                case NonogramColor::WHITE: {
                     sym = ' ';
                     break;
                 }
@@ -122,7 +122,7 @@ std::ostream &operator<<(std::ostream &os, Nonogram &N) {
 }
 
 NonogramLine::NonogramLine(
-        Nonogram *_ngram, unsigned _len, const Nonogram::Color *_data,
+        Nonogram *_ngram, unsigned _len, const NonogramColor *_data,
         unsigned _index, bool _is_row, const std::vector<unsigned> &constr)
         : ngram(_ngram),
           len(_len),
@@ -164,12 +164,12 @@ void NonogramLine::runs_fill() {
     for (BRun r : b_runs) {
 
         while (r.topEnd - r.len > prev_wrun_botStart) {
-            cell_solve(Nonogram::Color::WHITE, prev_wrun_botStart);
+            cell_solve(NonogramColor::WHITE, prev_wrun_botStart);
             prev_wrun_botStart++;
         }
 
         for (unsigned i = r.botStart; i < r.topEnd; i++) {
-            cell_solve(Nonogram::Color::BLACK, i);
+            cell_solve(NonogramColor::BLACK, i);
         }
 
         prev_wrun_botStart = r.botStart + r.len;
@@ -177,7 +177,7 @@ void NonogramLine::runs_fill() {
     }
 
     while (prev_wrun_botStart < len) {
-        cell_solve(Nonogram::Color::WHITE, prev_wrun_botStart);
+        cell_solve(NonogramColor::WHITE, prev_wrun_botStart);
         prev_wrun_botStart++;
     }
 
@@ -198,11 +198,11 @@ void NonogramLine::update() {
     unsigned i = b_runs[0].topEnd - b_runs[0].len;
     for (; i < len; i++) {
 
-        Nonogram::Color color = data[i];
-        if (color == Nonogram::Color::BLACK) {
+        NonogramColor color = data[i];
+        if (color == NonogramColor::BLACK) {
             curr_bblock_len++;
         }
-        else if (color == Nonogram::Color::WHITE) {
+        else if (color == NonogramColor::WHITE) {
             curr_bblock_len = 0;
             // first_nwi = i + 1;
         }
@@ -238,7 +238,7 @@ void NonogramLine::update() {
         // If we get here, we have a determined cell that has not been assigned to a run.
 
         // Try to assign to a run.
-        if (color == Nonogram::Color::BLACK) {
+        if (color == NonogramColor::BLACK) {
             if (ri0 == ri1) { // Can fix
 
                 botStart_propagate(ri0, i);
@@ -265,10 +265,10 @@ void NonogramLine::update() {
 
 void NonogramLine::block_max_size_fill(unsigned i, unsigned curr_bblock_len) {
     if (i + 1 < len) {
-        cell_solve(Nonogram::Color::WHITE, i + 1);
+        cell_solve(NonogramColor::WHITE, i + 1);
     }
     if (i >= curr_bblock_len) {
-        cell_solve(Nonogram::Color::WHITE, i - curr_bblock_len);
+        cell_solve(NonogramColor::WHITE, i - curr_bblock_len);
     }
 
 }
@@ -291,7 +291,7 @@ void NonogramLine::topEnd_propagate(unsigned ri, unsigned i) {
     }
 }
 
-void NonogramLine::cell_solve(Nonogram::Color color, unsigned i) {
+void NonogramLine::cell_solve(NonogramColor color, unsigned i) {
     if (data[i] != color) {
         ngram->cell_confirm(color, line_index, i, line_is_row);
     }

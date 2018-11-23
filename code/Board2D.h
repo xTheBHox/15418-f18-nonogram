@@ -7,7 +7,7 @@
 
 #include <cstdlib>
 #include <iostream>
-#include "Nonogram.h"
+#include "NonogramColor.h"
 
 template<class E>
 class Board2D {
@@ -31,8 +31,8 @@ public:
     const E* row_ptr_get(unsigned index) const;
     const E* col_ptr_get(unsigned index) const;
 
-    friend void *board2d_to_device(Board2D<Nonogram::Color> B_host);
-    friend void board2d_dev_to_host(void* B_dev_v, Board2D<Nonogram::Color> B_host);
+    friend void *board2d_to_device(Board2D<NonogramColor> B_host);
+    friend void board2d_dev_to_host(void* B_dev_v, Board2D<NonogramColor> B_host);
 
     // Board dimensions.
     const unsigned w;

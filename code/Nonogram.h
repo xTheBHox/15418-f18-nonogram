@@ -6,6 +6,7 @@
 #define CODE_NONOGRAM_H
 
 #include <vector>
+#include "NonogramColor.h"
 #include "Board2D.h"
 
 // Uncomment this to enforce checks.
@@ -16,13 +17,8 @@ class NonogramLine;
 
 class Nonogram {
 public:
-    enum Color : char {
-        UNKNOWN = 0,
-        WHITE = -1,
-        BLACK = 1
-    };
 
-    Nonogram(unsigned w, unsigned h) : board(w, h, UNKNOWN), row_constr(h), col_constr(w) { }
+    Nonogram(unsigned w, unsigned h) : board(w, h, NonogramColor::UNKNOWN), row_constr(h), col_constr(w) { }
 
     /**
      * Sets a row constraint in the nonogram.
@@ -54,8 +50,8 @@ public:
      * @param is_row whether this is a row or column, from NonogramLine
      * @return true if successful, false otherwise
      */
-    bool cell_confirm(Color color, unsigned line_index, unsigned i, bool is_row);
-    bool cell_check_confirm(Color color, unsigned line_index, unsigned i, bool is_row);
+    bool cell_confirm(NonogramColor color, unsigned line_index, unsigned i, bool is_row);
+    bool cell_check_confirm(NonogramColor color, unsigned line_index, unsigned i, bool is_row);
 
     unsigned w() const { return board.w; }
     unsigned h() const { return board.h; }
@@ -75,7 +71,7 @@ public:
     // This indicates the board has been modified.
     bool dirty;
 
-    Board2D<Color> board;
+    Board2D<NonogramColor> board;
     std::vector< std::vector<unsigned> > row_constr;
     std::vector< std::vector<unsigned> > col_constr;
 
@@ -111,7 +107,7 @@ public:
     } WRun;
 
     NonogramLine(
-            Nonogram *_ngram, unsigned _len, const Nonogram::Color *_data,
+            Nonogram *_ngram, unsigned _len, const NonogramColor *_data,
             unsigned _index, bool _is_row, const std::vector<unsigned> &constr);
 
     /**
@@ -150,14 +146,14 @@ public:
      * @param color the color to set
      * @param i the cell position to set
      */
-    void cell_solve(Nonogram::Color color, unsigned i);
+    void cell_solve(NonogramColor color, unsigned i);
 
 private:
     Nonogram *ngram;
     const unsigned len;
     const bool line_is_row;
     const unsigned line_index;
-    const Nonogram::Color *const data;
+    const NonogramColor *const data;
     std::vector<BRun> b_runs;
 };
 
