@@ -28,12 +28,16 @@ void *board2d_to_device(Board2D<NonogramColor> B_host) {
 }
 
 __host__
-void board2d_dev_to_host(void* B_dev_v, Board2D<NonogramColor> B_host) {
+void board2d_dev_to_host(void *B_dev_v, Board2D<NonogramColor> B_host) {
+
     Board2DDevice *B_dev = (Board2DDevice *)B_dev_v;
 
+#ifdef DEBUG
     if (B_dev->w != B_host.w || B_dev->h != B_host.h) {
+        std::cerr << "Dimension mismatch\n" << std:endl;
         return;
     }
+#endif
 
     size_t B_data_size = sizeof(char) * 2 * B_dev->w * B_dev->h;
     cudaMemcpy(B_host.data, B_dev->data, B_data_size, cudaMemcpyDeviceToHost);

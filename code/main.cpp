@@ -3,6 +3,9 @@
 #include <sstream>
 #include <unistd.h>
 #include <vector>
+
+#define PERF
+
 #include "Nonogram.h"
 #include "NonogramLineDevice.h"
 
@@ -14,6 +17,7 @@ Nonogram *parse_input_file_mk(std::string fInput) {
     std::fstream F;
     F.open(fInput);
     if (!F) {
+        std::cout << "Input file error" << std::endl;
         return nullptr;
     }
 
@@ -73,12 +77,15 @@ int main(int argc, char **argv) {
     }
 
     if (P == nullptr) return -1;
-#ifdef __CUDACC__
+// #ifdef __NVCC__
+    std::cout << "Solving (CUDA)..." << std::endl;
     ng_solve(P);
-#else
-    P->solve();
-#endif
+// #else
+//    std::cout << "Solving (proc)..." << std::endl;
+//    P->solve();
+// #endif
 
+    std::cout << "Completed." << std::endl;
     std::cout << *P;
     // Cleanup
     delete P;

@@ -6,8 +6,9 @@
 #define CODE_NONOGRAMLINEDEVICE_H
 
 #include "NonogramColor.h"
-#include "Board2DDevice.h"
 #include "Nonogram.h"
+
+#include "Board2DDevice.h"
 
 #define MAX_RUNS 32
 
@@ -29,15 +30,15 @@ typedef struct {
 } NonogramLineDevice;
 
 
-__device__ void ngline_dev_runs_fill(NonogramLineDevice *L, Board2DDevice *B);
-__device__ void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B);
-__device__ void ngline_dev_block_max_size_fill(NonogramLineDevice *L, Board2DDevice *B,
+void ngline_dev_runs_fill(NonogramLineDevice *L, Board2DDevice *B);
+void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B);
+void ngline_dev_block_max_size_fill(NonogramLineDevice *L, Board2DDevice *B,
                                     unsigned i, unsigned curr_bblock_len);
-__device__ void ngline_dev_botStart_propagate(NonogramLineDevice *L, Board2DDevice *B,
+void ngline_dev_botStart_propagate(NonogramLineDevice *L, Board2DDevice *B,
                                    unsigned ri, unsigned i);
-__device__ void ngline_dev_topEnd_propagate(NonogramLineDevice *L, Board2DDevice *B,
+void ngline_dev_topEnd_propagate(NonogramLineDevice *L, Board2DDevice *B,
                                  unsigned ri, unsigned i);
-__device__ void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
+void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
                            char color, unsigned i);
 
 #endif //CODE_NONOGRAMLINEDEVICE_H

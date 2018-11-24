@@ -11,7 +11,7 @@ void *ngline_dev_init_host(const unsigned *constr, unsigned constr_len) {
 
     void *line_dev_v;
     cudaMalloc(&line_dev_v, sizeof(NonogramLineDevice));
-    
+
     NonogramLineDevice *line_dev = (NonogramLineDevice *)line_dev_v;
 
     void *line_dev_constr = (void *) line_dev->constr;
@@ -276,6 +276,10 @@ void ngline_init_kernel(Board2DDevice *B, NonogramLineDevice **Ls) {
 __host__
 void ng_solve(Nonogram *N) {
 
+#ifdef PERF
+    unsigned perf_iter_cnt = 0;
+#endif
+
     size_t Ls_size = sizeof(NonogramLineDevice *) * (N->w() + N->h());
     NonogramLineDevice **Ls_tmp = (NonogramLineDevice **)malloc(Ls_size);
     unsigned i = 0;
@@ -297,17 +301,32 @@ void ng_solve(Nonogram *N) {
     NonogramLineDevice **Ls = (NonogramLineDevice **)Ls_tmpptr;
     Board2DDevice *B = (Board2DDevice *)board2d_to_device(N->board);
 
-    ngline_init_kernel<<<B->w + B->h, 1>>>(B, Ls);
+#ifdef DEBUG
+    std::cout << "Lines initializing..." << std::endl;
+#endif
+    ngline_init_kernel<<<N->w() + N->h(), 1>>>(B, Ls);
 
-    bool dirty_h;
+#ifdef DEBUG
+    std::cout << "Solving..." << std::endl;
+#endif
+    bool dirty_h = true;
+
     do {
-        ngline_row_solve_kernel<<< B->h, 1 >>> (B, Ls);
-        ngline_row_solve_kernel<<< B->w, 1 >>> (B, Ls);
+        ngline_row_solve_kernel<<< N->h(), 1 >>> (B, Ls);
+        ngline_row_solve_kernel<<< N->w(), 1 >>> (B, Ls);
 
         cudaMemcpy(&dirty_h, &B->dirty, sizeof(bool), cudaMemcpyDeviceToHost);
+
+#ifdef PERF
+        perf_iter_cnt++;
+#endif
+
     } while (dirty_h);
+
+#ifdef PERF
+    std::cout << perf_iter_cnt << std::endl;
+#endif
 
     board2d_dev_to_host((void *)B, N->board);
 
 }
-
