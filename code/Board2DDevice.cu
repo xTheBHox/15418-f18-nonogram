@@ -4,71 +4,109 @@
 
 #include "Board2DDevice.h"
 
-__host__
-void *board2d_to_device(Board2D<NonogramColor> B_host) {
+Board2DDevice *board2d_init_host(unsigned w, unsigned h) {
 
-    Board2DDevice tmp;
-    tmp.w = B_host.w;
-    tmp.h = B_host.h;
+    // Allocate the board header
+    Board2DDevice *B = (Board2DDevice *)malloc(sizeof(Board2DDevice));
 
-    void *B_data_dev;
-    size_t B_data_size = sizeof(char) * 2 * B_host.w * B_host.h;
-    cudaMalloc(&B_data_dev, B_data_size);
-    cudaMemcpy(B_data_dev, B_host.data, B_data_size, cudaMemcpyHostToDevice);
+    if (B == NULL) {
+        fprintf(stderr, "Failed to allocate board header\n");
+        return NULL;
+    }
 
-    tmp.data = (char *)B_data_dev;
-    tmp.dataCM = &tmp.data[B_host.w * B_host.h];
+    B->w = w;
+    B->h = h;
+    B->dirty = true;
 
-    void *B_dev;
-    cudaMalloc(&B_dev, sizeof(Board2DDevice));
-    cudaMemcpy(B_dev, &tmp, sizeof(Board2DDevice), cudaMemcpyHostToDevice);
+    // Allocate the board data array
 
-    return B_dev;
+    size_t b_len = w * h;
+    B->data = (NonogramColor *)calloc(2 * b_len, sizeof(NonogramColor));
+
+    if (B->data == NULL) {
+        fprintf(stderr, "Failed to allocate board data array\n");
+        free(B);
+        return NULL;
+    }
+
+    B->dataCM = &B->data[b_len];
+    return B;
 
 }
 
-__host__
-void board2d_dev_to_host(void *B_dev_v, Board2D<NonogramColor> B_host) {
+Board2DDevice *board2d_init_dev(Board2DDevice *B_host) {
 
-    Board2DDevice *B_dev = (Board2DDevice *)B_dev_v;
+#ifdef __NVCC__
+    Board2DDevice B_tmp_var;
+    Board2DDevice *B_tmp = &B_tmp_var;
+    void *B_dev;
+    size_t B_arr_size = sizeof(NonogramColor) * B_host->w * B_host->h;
 
-#ifdef DEBUG
-    if (B_dev->w != B_host.w || B_dev->h != B_host.h) {
-        std::cerr << "Dimension mismatch\n" << std:endl;
-        return;
-    }
+    *B_tmp = *B_host;
+    cudaCheckError(cudaMalloc((void*) B_tmp->data, B_arr_size));
+    cudaCheckError(cudaMemcpy((void*) B_tmp->data, (void *)B_host->data, B_arr_size, cudaMemcpyHostToDevice));
+    B_tmp->dataCM = B_tmp->data + B_host->w * B_host->h;
+
+    cudaCheckError(cudaMalloc(B->dev, sizeof(Board2DDevice)));
+    cudaCheckError(cudaMemcpy(B->dev, (void *)B_tmp, sizeof(Board2DDevice), cudaMemcpyHostToDevice));
+
+    return B_dev;
+#else
+    return B_host;
 #endif
 
-    size_t B_data_size = sizeof(char) * 2 * B_dev->w * B_dev->h;
-    cudaMemcpy(B_host.data, B_dev->data, B_data_size, cudaMemcpyDeviceToHost);
 }
 
-__host__
-void *board2d_dev_init(unsigned w, unsigned h, char val) {
+void board2d_free_host(Board2DDevice *B) {
 
-    Board2DDevice tmp;
-    tmp.w = w;
-    tmp.h = h;
-
-    void *B_data_dev;
-    size_t B_data_size = sizeof(char) * 2 * w * h;
-    cudaMalloc(&B_data_dev, B_data_size);
-
-    tmp.data = (char *)B_data_dev;
-    tmp.dataCM = &tmp.data[w * h];
-
-    void *B_dev;
-    cudaMalloc(&B_dev, sizeof(Board2DDevice));
-    cudaMemcpy(B_dev, &tmp, sizeof(Board2DDevice), cudaMemcpyHostToDevice);
-
-    return B_dev;
+    free(B->data);
+    free(B);
 
 }
 
-__host__
-void board2d_dev_free(Board2DDevice *B) {
-    cudaFree(B->data);
-    cudaFree(B);
+void board2d_cleanup_dev(Board2DDevice *B_host, Board2DDevice *B_dev) {
+
+#ifdef __NVCC__
+    void *B_dev_data_val;
+    void *B_dev_data = &B_dev_data_val;
+    cudaCheckError(cudaMemcpy(B_dev_data, (void *)&(B_dev->data), sizeof(void *), cudeMemcpyDeviceToHost));
+
+    size_t B_arr_size = sizeof(NonogramColor) * B_host->w * B_host->h;
+    cudaCheckError(cudaMemcpy((void *)B_host->data, B_dev_data_val, B_arr_size, cudeMemcpyDeviceToHost));
+
+    cudaCheckError(cudaFree(B_dev_data));
+    cudaCheckError(cudaFree((void *)B_dev));
+#else
+    return;
+#endif
+
+}
+
+std::ostream &operator<<(std::ostream &os, Board2DDevice *B) {
+
+    for (unsigned r = 0; r < B->h; r++) {
+        for (unsigned c = 0; c < B->w; c++) {
+            char sym = 'X';
+            switch (board2d_dev_elem_get_rm(c, r)) {
+                case NonogramColor::BLACK: {
+                    sym = '#';
+                    break;
+                }
+                case NonogramColor::UNKNOWN: {
+                    sym = '?';
+                    break;
+                }
+                case NonogramColor::WHITE: {
+                    sym = ' ';
+                    break;
+                }
+            }
+            os << sym;
+        }
+        os << std::endl;
+    }
+    return os;
+
 }
 
 __device__

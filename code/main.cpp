@@ -5,20 +5,50 @@
 #include <vector>
 
 #define PERF
+// #define DEBUG
+// #define __NVCC__
 
-#include "Nonogram.h"
+#ifdef __NVCC__
+#ifdef DEBUG
+#define cudaCheckError(ans) cudaAssert((ans), __FILE__, __LINE__);
+
+inline void cudaAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+    if (code != cudaSuccess) {
+        fprintf(stderr, "CUDA Error: %s at %s:%d\n",
+        cudaGetErrorString(code), file, line);
+        if (abort) exit(code);
+    }
+}
+
+#else // __DEBUG__
+
+#define cudaCheckError(ans) ans
+
+#endif // __DEBUG__
+#else // __NVCC__
+#ifdef __JETBRAINS_IDE__
+#include "CLion.h"
+#else
+#define __host__
+#define __device__
+#define __global__
+#endif
+
+#endif // __NVCC__
+
+#include "Board2DDevice.h"
 #include "NonogramLineDevice.h"
 
 #define BUFLEN 255
 
-
-Nonogram *parse_input_file_mk(std::string fInput) {
+bool parse_input_file_mk(std::string fInput, NonogramLineDevice *Ls, Board2DDevice *B) {
 
     std::fstream F;
     F.open(fInput);
     if (!F) {
         std::cout << "Input file error" << std::endl;
-        return nullptr;
+        return false;
     }
 
     std::string line;
@@ -27,20 +57,23 @@ Nonogram *parse_input_file_mk(std::string fInput) {
     std::getline(F, line);
     std::istringstream iss(line);
     if (!(iss >> h >> w)) {
-        return nullptr;
+        return false;
     }
 
-    // Make a new Nonogram
-    Nonogram *puzzle = new Nonogram(w, h);
+    // Initialize structs
+    if (!ng_init(w, h, Ls, B)) {
+        return false;
+    }
 
     for (unsigned r = 0; r < h; r++) {
         std::getline(F, line);
         iss.str(line);
-        std::vector<unsigned> tmp_constr;
         while (iss >> n) {
-            tmp_constr.push_back(n);
+            if (!ng_constr_add(Ls, r, n)) {
+                std::cout << "MAX_RUNS exceeded" << std::endl;
+                return false;
+            }
         }
-        puzzle->row_constr_set(r, std::move(tmp_constr));
     }
 
     std::getline(F, line);
@@ -48,47 +81,43 @@ Nonogram *parse_input_file_mk(std::string fInput) {
     for (unsigned c = 0; c < w; c++) {
         std::getline(F, line);
         iss.str(line);
-        std::vector<unsigned> tmp_constr;
         while (iss >> n) {
-            tmp_constr.push_back(n);
+            if (!ng_constr_add(Ls, c, n + h)) {
+                std::cout << "MAX_RUNS exceeded" << std::endl;
+                return false;
+            }
         }
-        puzzle->col_constr_set(c, std::move(tmp_constr));
     }
 
     F.close();
-
-    return puzzle;
-
+    return true;
 }
 
 int main(int argc, char **argv) {
 
     int c;
     std::string fInput;
-    Nonogram *P = nullptr;
+    Board2DDevice *B = nullptr;
+    NonogramLineDevice *Ls = nullptr;
     while ((c = getopt(argc, argv, "f:")) != -1) {
         switch (c) {
             case 'f': {
                 fInput.assign(optarg);
-                P = parse_input_file_mk(fInput);
+                if (!parse_input_file_mk(fInput, Ls, B)) {
+                    return -1;
+                }
                 break;
             }
         }
     }
 
-    if (P == nullptr) return -1;
-// #ifdef __NVCC__
-    std::cout << "Solving (CUDA)..." << std::endl;
-    ng_solve(P);
-// #else
-//    std::cout << "Solving (proc)..." << std::endl;
-//    P->solve();
-// #endif
+    std::cout << "Solving..." << std::endl;
+    ng_solve(Ls, B);
 
     std::cout << "Completed." << std::endl;
-    std::cout << *P;
+    std::cout << B;
     // Cleanup
-    delete P;
+    ng_free(Ls, B);
 
     return 0;
 }
