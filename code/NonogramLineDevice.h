@@ -7,18 +7,7 @@
 
 #include <cstdlib>
 
-#ifdef __NVCC__
-
-#else
-
-#ifdef __JETBRAINS_IDE__
-#include "CLion.h"
-#else
-#define __host__
-#define __device__
-#define __global__
-#endif
-#endif
+#include "Defs.h"
 
 #include "NonogramColor.h"
 #include "Board2DDevice.h"
@@ -42,16 +31,15 @@ typedef struct {
 
 } NonogramLineDevice;
 
-
-void ngline_dev_runs_fill(NonogramLineDevice *L, Board2DDevice *B);
-void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B);
-void ngline_dev_block_max_size_fill(NonogramLineDevice *L, Board2DDevice *B,
+__device__ void ngline_dev_runs_fill(NonogramLineDevice *L, Board2DDevice *B);
+__device__ void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B);
+__device__ void ngline_dev_block_max_size_fill(NonogramLineDevice *L, Board2DDevice *B,
                                     unsigned i, unsigned curr_bblock_len);
-void ngline_dev_botStart_propagate(NonogramLineDevice *L, Board2DDevice *B,
+__device__ void ngline_dev_botStart_propagate(NonogramLineDevice *L, Board2DDevice *B,
                                    unsigned ri, unsigned i);
-void ngline_dev_topEnd_propagate(NonogramLineDevice *L, Board2DDevice *B,
+__device__ void ngline_dev_topEnd_propagate(NonogramLineDevice *L, Board2DDevice *B,
                                  unsigned ri, unsigned i);
-void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
+__device__ void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
                            NonogramColor color, unsigned i);
 
 bool ng_init(unsigned w, unsigned h, NonogramLineDevice **Ls, Board2DDevice **B);

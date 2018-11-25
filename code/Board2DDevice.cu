@@ -4,6 +4,7 @@
 
 #include "Board2DDevice.h"
 
+
 Board2DDevice *board2d_init_host(unsigned w, unsigned h) {
 
     // Allocate the board header
@@ -43,14 +44,14 @@ Board2DDevice *board2d_init_dev(Board2DDevice *B_host) {
     size_t B_arr_size = sizeof(NonogramColor) * B_host->w * B_host->h;
 
     *B_tmp = *B_host;
-    cudaCheckError(cudaMalloc((void*) B_tmp->data, B_arr_size));
-    cudaCheckError(cudaMemcpy((void*) B_tmp->data, (void *)B_host->data, B_arr_size, cudaMemcpyHostToDevice));
+    cudaCheckError(cudaMalloc((void **)&(B_tmp->data), B_arr_size));
+    cudaCheckError(cudaMemcpy((void *)B_tmp->data, (void *)B_host->data, B_arr_size, cudaMemcpyHostToDevice));
     B_tmp->dataCM = B_tmp->data + B_host->w * B_host->h;
 
-    cudaCheckError(cudaMalloc(B->dev, sizeof(Board2DDevice)));
-    cudaCheckError(cudaMemcpy(B->dev, (void *)B_tmp, sizeof(Board2DDevice), cudaMemcpyHostToDevice));
+    cudaCheckError(cudaMalloc(&B_dev, sizeof(Board2DDevice)));
+    cudaCheckError(cudaMemcpy(B_dev, (void *)B_tmp, sizeof(Board2DDevice), cudaMemcpyHostToDevice));
 
-    return B_dev;
+    return (Board2DDevice *)B_dev;
 #else
     return B_host;
 #endif
@@ -69,10 +70,10 @@ void board2d_cleanup_dev(Board2DDevice *B_host, Board2DDevice *B_dev) {
 #ifdef __NVCC__
     void *B_dev_data_val;
     void *B_dev_data = &B_dev_data_val;
-    cudaCheckError(cudaMemcpy(B_dev_data, (void *)&(B_dev->data), sizeof(void *), cudeMemcpyDeviceToHost));
+    cudaCheckError(cudaMemcpy(B_dev_data, (void *)&(B_dev->data), sizeof(void *), cudaMemcpyDeviceToHost));
 
     size_t B_arr_size = sizeof(NonogramColor) * B_host->w * B_host->h;
-    cudaCheckError(cudaMemcpy((void *)B_host->data, B_dev_data_val, B_arr_size, cudeMemcpyDeviceToHost));
+    cudaCheckError(cudaMemcpy((void *)B_host->data, B_dev_data_val, B_arr_size, cudaMemcpyDeviceToHost));
 
     cudaCheckError(cudaFree(B_dev_data));
     cudaCheckError(cudaFree((void *)B_dev));
@@ -87,7 +88,7 @@ std::ostream &operator<<(std::ostream &os, Board2DDevice *B) {
     for (unsigned r = 0; r < B->h; r++) {
         for (unsigned c = 0; c < B->w; c++) {
             char sym = 'X';
-            switch (board2d_dev_elem_get_rm(c, r)) {
+            switch (board2d_dev_elem_get_rm(B, c, r)) {
                 case NonogramColor::BLACK: {
                     sym = '#';
                     break;
@@ -97,7 +98,7 @@ std::ostream &operator<<(std::ostream &os, Board2DDevice *B) {
                     break;
                 }
                 case NonogramColor::WHITE: {
-                    sym = ' ';
+                    sym = '.';
                     break;
                 }
             }
@@ -110,28 +111,28 @@ std::ostream &operator<<(std::ostream &os, Board2DDevice *B) {
 }
 
 __device__
-void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, char val) {
+void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColor val) {
     B->data[y * B->w + x] = val;
     B->dataCM[x * B->h + y] = val;
     B->dirty = true;
 }
 
 __device__
-char board2d_dev_elem_get_rm(Board2DDevice *B, unsigned x, unsigned y) {
+NonogramColor board2d_dev_elem_get_rm(Board2DDevice *B, unsigned x, unsigned y) {
     return B->data[y * B->w + x];
 }
 
 __device__
-char board2d_dev_elem_get_cm(Board2DDevice *B, unsigned x, unsigned y) {
+NonogramColor board2d_dev_elem_get_cm(Board2DDevice *B, unsigned x, unsigned y) {
     return B->dataCM[x * B->h + y];
 }
 
 __device__
-char *board2d_dev_row_ptr_get(Board2DDevice *B, unsigned index) {
+NonogramColor *board2d_dev_row_ptr_get(Board2DDevice *B, unsigned index) {
     return &B->data[index * B->w];
 }
 
 __device__
-char *board2d_dev_col_ptr_get(Board2DDevice *B, unsigned index) {
+NonogramColor *board2d_dev_col_ptr_get(Board2DDevice *B, unsigned index) {
     return &B->dataCM[index * B->h];
 }

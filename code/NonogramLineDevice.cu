@@ -20,6 +20,11 @@ void ngline_init_dev(NonogramLineDevice *L) {
         topSum++;
     }
 
+#ifndef __NVCC__
+#ifdef DEBUG
+    printf("topSum=%d\t", topSum);
+#endif
+#endif
     // Find the bottommost line configuration for each run.
 
     unsigned botSum = L->len;
@@ -29,6 +34,11 @@ void ngline_init_dev(NonogramLineDevice *L) {
         botSum--;
     }
 
+#ifndef __NVCC__
+#ifdef DEBUG
+    printf("botSum=%d\n", botSum);
+#endif
+#endif
 }
 
 __device__
@@ -176,7 +186,7 @@ void ngline_dev_topEnd_propagate(NonogramLineDevice *L, Board2DDevice *B,
 
 __device__
 void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
-                           char color, unsigned i) {
+                           NonogramColor color, unsigned i) {
     if (L->data[i] != color) {
         unsigned x, y;
         if (L->line_is_row) {
@@ -199,7 +209,7 @@ void ngline_row_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls) {
 void ngline_row_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned i) {
 #endif
 
-    NonogramLineDevice *L = Ls[blockIdx.x];
+    NonogramLineDevice *L = &Ls[i];
     ngline_dev_update(L, B);
     ngline_dev_runs_fill(L, B);
 
@@ -230,10 +240,20 @@ void ngline_init_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned i) {
     NonogramLineDevice *L = &Ls[i];
 
     if (L->line_is_row) {
-        line_data = board2d_dev_row_ptr_get(B, L->line_index);
+        L->data = board2d_dev_row_ptr_get(B, L->line_index);
+#ifndef __NVCC__
+#ifdef DEBUG
+        printf("Init row %d len=%d constr_len=%d\t", L->line_index, L->len, L->constr_len);
+#endif
+#endif
     }
     else {
-        line_data = board2d_dev_col_ptr_get(B, L->line_index);
+        L->data = board2d_dev_col_ptr_get(B, L->line_index);
+#ifndef __NVCC__
+#ifdef DEBUG
+        printf("Init col %d len=%d constr_len=%d\t", L->line_index, L->len, L->constr_len);
+#endif
+#endif
     }
 
     ngline_init_dev(L);
@@ -241,32 +261,33 @@ void ngline_init_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned i) {
 }
 
 
-bool ng_linearr_init_host(unsigned w, unsigned h, NonogramLineDevice *Ls) {
+bool ng_linearr_init_host(unsigned w, unsigned h, NonogramLineDevice **Ls) {
 
     // Allocate the array of line solver structs
     unsigned Ls_len = w + h;
-    *Ls_size = sizeof(NonogramLineDevice) * Ls_len;
-    Ls = malloc(*Ls_size);
+    size_t Ls_size = sizeof(NonogramLineDevice) * Ls_len;
+    NonogramLineDevice *Ls_tmp = (NonogramLineDevice *)malloc(Ls_size);
 
-    if (Ls == NULL) {
+    if (Ls_tmp == NULL) {
         fprintf(stderr, "Failed to allocate host line array\n");
         return false;
     }
 
     for (unsigned i = 0; i < h; i++) {
-        Ls[i].constr_len = 0;
-        Ls[i].line_index = i;
-        Ls[i].line_is_row = true;
-        Ls[i].len = w;
+        Ls_tmp[i].constr_len = 0;
+        Ls_tmp[i].line_index = i;
+        Ls_tmp[i].line_is_row = true;
+        Ls_tmp[i].len = w;
     }
 
     for (unsigned i = 0; i < w; i++) {
-        Ls[i + h].constr_len = 0;
-        Ls[i + h].line_index = i;
-        Ls[i + h].line_is_row = false;
-        Ls[i + h].len = h;
+        Ls_tmp[i + h].constr_len = 0;
+        Ls_tmp[i + h].line_index = i;
+        Ls_tmp[i + h].line_is_row = false;
+        Ls_tmp[i + h].len = h;
     }
 
+    *Ls = Ls_tmp;
     return true;
 
 }
@@ -280,7 +301,7 @@ NonogramLineDevice *ng_linearr_init_dev(unsigned w, unsigned h, NonogramLineDevi
     cudaCheckError(cudaMalloc(&Ls_dev, Ls_size));
     cudaCheckError(cudaMemcpy(Ls_dev, (void *)Ls_host, Ls_size, cudaMemcpyHostToDevice));
 
-    return Ls_dev;
+    return (NonogramLineDevice *)Ls_dev;
 #else
     return Ls_host;
 #endif
@@ -297,11 +318,11 @@ void ng_linearr_free_dev(NonogramLineDevice *Ls_dev) {
 
 }
 
-bool ng_init(unsigned w, unsigned h, NonogramLineDevice *Ls, Board2DDevice *B) {
+bool ng_init(unsigned w, unsigned h, NonogramLineDevice **Ls, Board2DDevice **B) {
 
     if (!ng_linearr_init_host(w, h, Ls)) return false;
-    B = board2d_init_host(w, h);
-    if (B == NULL) return false;
+    *B = board2d_init_host(w, h);
+    if (*B == NULL) return false;
     return true;
 
 }
@@ -329,7 +350,9 @@ bool ng_constr_add(NonogramLineDevice *Ls, unsigned line_index, unsigned constr)
 }
 
 void ng_solve(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
-
+#ifdef DEBUG
+    std::cout << "ng_solve called" << std::endl;
+#endif
 #ifdef PERF
     unsigned perf_iter_cnt = 0;
 #endif
@@ -339,7 +362,14 @@ void ng_solve(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
 
     // Move structures to device memory
 
+#ifdef DEBUG
+    std::cout << "Line array initializing..." << std::endl;
+#endif
     Ls_dev = ng_linearr_init_dev(B_host->w, B_host->h, Ls_host);
+
+#ifdef DEBUG
+    std::cout << "Board initializing..." << std::endl;
+#endif
     B_dev = board2d_init_dev(B_host);
 
     // Initialize the runs
@@ -359,14 +389,17 @@ void ng_solve(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
 #endif
 
 #ifdef DEBUG
-    std::cout << "Solving..." << std::endl;
+    std::cout << "Lines alternating..." << std::endl;
 #endif
 
     do {
 
+        B_host->dirty = false;
 #ifdef __NVCC__
+        cudaMemcpy(&B_dev->dirty, &B_host->dirty, sizeof(bool), cudaMemcpyHostToDevice);
         ngline_row_solve_kernel<<<B_host->h, 1>>> (B_dev, Ls_dev);
         ngline_col_solve_kernel<<<B_host->w, 1>>> (B_dev, Ls_dev);
+        cudaMemcpy(&B_host->dirty, &B_dev->dirty, sizeof(bool), cudaMemcpyDeviceToHost);
 #else
         for (unsigned i = 0; i < B_host->h; i++) {
             ngline_row_solve_kernel(B_dev, Ls_dev, i);
@@ -375,7 +408,6 @@ void ng_solve(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
             ngline_col_solve_kernel(B_dev, Ls_dev, i);
         }
 #endif
-        cudaMemcpy(&B_host->dirty, &B_dev->dirty, sizeof(bool), cudaMemcpyDeviceToHost);
 
 #ifdef PERF
         perf_iter_cnt++;
@@ -384,7 +416,7 @@ void ng_solve(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
     } while (B_host->dirty);
 
 #ifdef PERF
-    std::cout << perf_iter_cnt << std::endl;
+    std::cout << "Total iterations: " << perf_iter_cnt << std::endl;
 #endif
 
     board2d_cleanup_dev(B_host, B_dev);

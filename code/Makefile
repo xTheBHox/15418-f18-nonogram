@@ -1,25 +1,54 @@
 
-EXEC=ngram
-CXX=g++ -m64 -std=c++11
-CXXFLAGS=-Wall -O3
-DBGFLAGS=-D DEBUG -D PERF 
 CXX_FILES=main.cpp
-CU_FILES=Board2DDevice.cpp NonogramLineDevice.cpp
-OBJDIR=objs
-OBJ=$(OBJDIR)/main.o $(OBJDIR)/Board2DDevice.o $(OBJDIR)/NonogramLineDevice.o
+CU_FILES=Board2DDevice.cu NonogramLineDevice.cu
+OBJ_FILES=main.o Board2DDevice.o NonogramLineDevice.o
+EXEC=$(EXECPAR)
+EXECPAR=ngram-par
+EXECSEQ=ngram-seq
+CXX=g++ -m64
+CXXFLAGS=-Wall -O3 -std=c++11
+DBGFLAGS= -D DEBUG -D PERF 
+NVCC=nvcc -m64
+NVCCFLAGS=-O3 --gpu-architecture compute_35 -std=c++11
+NVCCLIBS=-L /usr/local/depot/cuda-8.0/lib64/ -l cudart
+OBJDIR=$(PARDIR)
+SEQDIR=objseq
+PARDIR=objpar
+
+OBJSEQ=$(addprefix $(SEQDIR)/, $(OBJ_FILES))
+OBJPAR=$(addprefix $(PARDIR)/, $(OBJ_FILES)) 
+#OBJ=$(OBJDIR)/main.o $(OBJDIR)/Board2DDevice.o $(OBJDIR)/NonogramLineDevice.o
 
 .PHONY: dirs clean
 
-default: $(EXEC)
+default: $(EXEC) 
+
+seq: override OBJDIR := $(SEQDIR)
+seq: clean $(EXECSEQ)
+
+debug: CXXFLAGS += $(DBGFLAGS)
+debug: clean $(EXECPAR)
 
 dirs:
 		mkdir -p $(OBJDIR)/
 
 clean:
-		rm -rf $(OBJDIR) *~ $(EXEC)
-
-$(EXEC): dirs $(OBJ)
-	$(CXX) -o $@ $(CFLAGS) $(DBGFLAGS) $(OBJ)
+		rm -rf $(SEQDIR) $(PARDIR) *~ $(EXECSEQ) $(EXECPAR)
  
-$(OBJDIR)/%.o: %.cpp
-	$(CXX) -c -o $@ $(CXXFLAGS) $(DBGFLAGS) $<
+$(EXECSEQ): dirs $(OBJSEQ)
+	$(CXX) -o $@ $(CXXFLAGS) $(OBJSEQ)
+ 
+$(SEQDIR)/%.o: %.cpp
+	$(CXX) -c -o $@ $(CXXFLAGS) $<
+
+$(SEQDIR)/%.o: %.cu
+	$(CXX) -c -o $@ $(CXXFLAGS) -x c++ $<
+
+$(EXECPAR): dirs $(OBJPAR)
+	$(NVCC) -o $@ $(NVCCFLAGS) $(NVCCLIBS) $(OBJPAR)
+ 
+$(PARDIR)/%.o: %.cpp
+	$(CXX) -c -o $@ $(CXXFLAGS) $<
+ 
+$(PARDIR)/%.o: %.cu
+	$(NVCC) -c -o $@ $(NVCCFLAGS) $(NVCCLIBS) $<
