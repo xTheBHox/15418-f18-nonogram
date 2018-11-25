@@ -11,7 +11,6 @@ DBGFLAGS= -D DEBUG -D PERF
 NVCC=nvcc -m64
 NVCCFLAGS=-O3 --gpu-architecture compute_35 -std=c++11
 NVCCLIBS=-L /usr/local/depot/cuda-8.0/lib64/ -l cudart
-OBJDIR=$(PARDIR)
 SEQDIR=objseq
 PARDIR=objpar
 
@@ -21,16 +20,20 @@ OBJPAR=$(addprefix $(PARDIR)/, $(OBJ_FILES))
 
 .PHONY: dirs clean
 
-default: $(EXEC) 
+default: $(EXECPAR) 
 
-seq: override OBJDIR := $(SEQDIR)
 seq: clean $(EXECSEQ)
 
 debug: CXXFLAGS += $(DBGFLAGS)
+debug: NVCCFLAGS += $(DBGFLAGS)
 debug: clean $(EXECPAR)
 
+debug-seq: CXXFLAGS += $(DBGFLAGS)
+debug-seq: clean $(EXECSEQ)
+
 dirs:
-		mkdir -p $(OBJDIR)/
+		mkdir -p $(SEQDIR)/
+		mkdir -p $(PARDIR)/
 
 clean:
 		rm -rf $(SEQDIR) $(PARDIR) *~ $(EXECSEQ) $(EXECPAR)

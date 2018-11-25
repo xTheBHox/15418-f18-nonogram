@@ -3,6 +3,9 @@
 
 #ifdef __NVCC__
 #ifdef DEBUG
+
+#include <cstdio>
+
 #define cudaCheckError(ans) cudaAssert((ans), __FILE__, __LINE__);
 
 inline void cudaAssert(cudaError_t code, const char *file, int line, bool abort=true)
