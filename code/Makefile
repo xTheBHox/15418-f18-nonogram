@@ -1,53 +1,25 @@
 
-EXECUTABLE := ngram
-
-CU_FILES   := NonogramLineDevice.cu Board2DDevice.cu
-
-CU_DEPS    :=
-
-CC_FILES   := main.cpp Nonogram.cpp Board2D.cpp
-
-LOGS	   := logs
-
-###########################################################
-
-ARCH=$(shell uname | sed -e 's/-.*//g')
+EXEC=ngram
+CXX=g++ -m64 -std=c++11
+CXXFLAGS=-Wall -O3
+DBGFLAGS=-D DEBUG -D PERF 
+CXX_FILES=main.cpp
+CU_FILES=Board2DDevice.cpp NonogramLineDevice.cpp
 OBJDIR=objs
-CXX=g++ -m64
-CXXFLAGS=-O3 -Wall -g -std=c++11
-HOSTNAME=$(shell hostname)
-
-LIBS       :=
-FRAMEWORKS :=
-
-NVCCFLAGS=-O3 -m64 -std=c++11 --gpu-architecture compute_35
-LIBS += cudart
-
-ifneq ($(wildcard /opt/cuda-8.0/.*),)
-# Latedays
-LDFLAGS=-L/opt/cuda-8.0/lib64/ -lcudart
-else
-# GHC
-LDFLAGS=-L/usr/local/depot/cuda-8.0/lib64/ -lcudart
-endif
-
-LDLIBS  := $(addprefix -l, $(LIBS))
-LDFRAMEWORKS := $(addprefix -framework , $(FRAMEWORKS))
-
-NVCC=nvcc
-
-OBJS=$(OBJDIR)/main.o $(OBJDIR)/Nonogram.o $(OBJDIR)/Board2D.o \
-     $(OBJDIR)/NonogramLineDevice.o $(OBJDIR)/Board2DDevice.o
+OBJ=$(OBJDIR)/main.o $(OBJDIR)/Board2DDevice.o $(OBJDIR)/NonogramLineDevice.o
 
 .PHONY: dirs clean
 
-default: $(EXECUTABLE)
+default: $(EXEC)
 
-$(EXECUTABLE): dirs $(OBJS)
-		$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS) $(LDLIBS) $(LDFRAMEWORKS)
+dirs:
+		mkdir -p $(OBJDIR)/
 
+clean:
+		rm -rf $(OBJDIR) *~ $(EXEC)
+
+$(EXEC): dirs $(OBJ)
+	$(CXX) -o $@ $(CFLAGS) $(DBGFLAGS) $(OBJ)
+ 
 $(OBJDIR)/%.o: %.cpp
-		$(CXX) $< $(CXXFLAGS) -c -o $@
-
-$(OBJDIR)/%.o: %.cu
-		$(NVCC) $< $(NVCCFLAGS) -c -o $@
+	$(CXX) -c -o $@ $(CXXFLAGS) $(DBGFLAGS) $<
