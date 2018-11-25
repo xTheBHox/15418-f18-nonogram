@@ -8,11 +8,11 @@
 
 #define cudaCheckError(ans) cudaAssert((ans), __FILE__, __LINE__);
 
-inline void cudaAssert(cudaError_t code, const char *file, int line, bool abort=true)
+inline void cudaAssert(cudaError_t code, const char *file, int line, bool abort=false)
 {
     if (code != cudaSuccess) {
-        fprintf(stderr, "CUDA Error: %s at %s:%d\n",
-        cudaGetErrorString(code), file, line);
+        fprintf(stderr, "CUDA Error %d: %s at %s:%d\n",
+        code, cudaGetErrorString(code), file, line);
         if (abort) exit(code);
     }
 }

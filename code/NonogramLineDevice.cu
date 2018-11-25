@@ -1,6 +1,8 @@
 //
 // Created by Benjamin Huang on 11/19/2018.
 //
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 #include "NonogramLineDevice.h"
 
@@ -50,12 +52,12 @@ void ngline_dev_runs_fill(NonogramLineDevice *L, Board2DDevice *B) {
         BRun r = L->b_runs[ri];
 
         while (r.topEnd - L->constr[ri] > prev_wrun_botStart) {
-            ngline_dev_cell_solve(L, B, NonogramColor::WHITE, prev_wrun_botStart);
+            ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, prev_wrun_botStart);
             prev_wrun_botStart++;
         }
 
         for (unsigned i = r.botStart; i < r.topEnd; i++) {
-            ngline_dev_cell_solve(L, B, NonogramColor::BLACK, i);
+            ngline_dev_cell_solve(L, B, NGCOLOR_BLACK, i);
         }
 
         prev_wrun_botStart = r.botStart + L->constr[ri];
@@ -63,7 +65,7 @@ void ngline_dev_runs_fill(NonogramLineDevice *L, Board2DDevice *B) {
     }
 
     while (prev_wrun_botStart < L->len) {
-        ngline_dev_cell_solve(L, B, NonogramColor::WHITE, prev_wrun_botStart);
+        ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, prev_wrun_botStart);
         prev_wrun_botStart++;
     }
 
@@ -86,10 +88,10 @@ void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B) {
     for (; i < L->len; i++) {
 
         char color = L->data[i];
-        if (color == NonogramColor::BLACK) {
+        if (color == NGCOLOR_BLACK) {
             curr_bblock_len++;
         }
-        else if (color == NonogramColor::WHITE) {
+        else if (color == NGCOLOR_WHITE) {
             curr_bblock_len = 0;
             // first_nwi = i + 1;
         }
@@ -125,7 +127,7 @@ void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B) {
         // If we get here, we have a determined cell that has not been assigned to a run.
 
         // Try to assign to a run.
-        if (color == NonogramColor::BLACK) {
+        if (color == NGCOLOR_BLACK) {
             if (ri0 == ri1) { // Can fix
 
                 ngline_dev_botStart_propagate(L, B, ri0, i);
@@ -154,10 +156,10 @@ __device__
 void ngline_dev_block_max_size_fill(NonogramLineDevice *L, Board2DDevice *B,
                          unsigned i, unsigned curr_bblock_len) {
     if (i + 1 < L->len) {
-        ngline_dev_cell_solve(L, B, NonogramColor::WHITE, i + 1);
+        ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, i + 1);
     }
     if (i >= curr_bblock_len) {
-        ngline_dev_cell_solve(L, B, NonogramColor::WHITE, i - curr_bblock_len);
+        ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, i - curr_bblock_len);
     }
 
 }
@@ -294,6 +296,9 @@ bool ng_linearr_init_host(unsigned w, unsigned h, NonogramLineDevice **Ls) {
 
 NonogramLineDevice *ng_linearr_init_dev(unsigned w, unsigned h, NonogramLineDevice *Ls_host) {
 
+#ifdef DEBUG
+    std::cout << __func__ << " called" << std::endl;
+#endif
 #ifdef __NVCC__
     void *Ls_dev;
     size_t Ls_size = sizeof(NonogramLineDevice) * (w + h);

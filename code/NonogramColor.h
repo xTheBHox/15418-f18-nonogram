@@ -4,10 +4,10 @@
 #ifndef CODE_NONOGRAMCOLOR_H
 #define CODE_NONOGRAMCOLOR_H
 
-    enum NonogramColor : char {
-        UNKNOWN = 0,
-        WHITE = -1,
-        BLACK = 1
+    enum NonogramColor {
+        NGCOLOR_UNKNOWN = 0,
+        NGCOLOR_WHITE = -1,
+        NGCOLOR_BLACK = 1
     };
     
     

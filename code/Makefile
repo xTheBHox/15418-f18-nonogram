@@ -6,11 +6,12 @@ EXEC=$(EXECPAR)
 EXECPAR=ngram-par
 EXECSEQ=ngram-seq
 CXX=g++ -m64
-CXXFLAGS=-Wall -O3 -std=c++11
-DBGFLAGS= -D DEBUG -D PERF 
+CXXFLAGS=-Wall -O3
+DBGFLAGS= -D DEBUG -D PERF -g
 NVCC=nvcc -m64
-NVCCFLAGS=-O3 --gpu-architecture compute_35 -std=c++11
-NVCCLIBS=-L /usr/local/depot/cuda-8.0/lib64/ -l cudart
+NVCCFLAGS=-O3 --gpu-architecture compute_61 --gpu-code sm_61
+NVCCDBGFLAGS=$(DBGFLAGS) -G
+LDFLAGS=-L /usr/local/depot/cuda-8.0/lib64/ -l cudart
 SEQDIR=objseq
 PARDIR=objpar
 
@@ -20,12 +21,12 @@ OBJPAR=$(addprefix $(PARDIR)/, $(OBJ_FILES))
 
 .PHONY: dirs clean
 
-default: $(EXECPAR) 
+default: clean $(EXECPAR) 
 
 seq: clean $(EXECSEQ)
 
 debug: CXXFLAGS += $(DBGFLAGS)
-debug: NVCCFLAGS += $(DBGFLAGS)
+debug: NVCCFLAGS += $(NVCCDBGFLAGS)
 debug: clean $(EXECPAR)
 
 debug-seq: CXXFLAGS += $(DBGFLAGS)
@@ -48,10 +49,10 @@ $(SEQDIR)/%.o: %.cu
 	$(CXX) -c -o $@ $(CXXFLAGS) -x c++ $<
 
 $(EXECPAR): dirs $(OBJPAR)
-	$(NVCC) -o $@ $(NVCCFLAGS) $(NVCCLIBS) $(OBJPAR)
+	$(NVCC) -o $@ $(NVCCFLAGS) -D __NVCC__ $(LDFLAGS) $(OBJPAR)
  
 $(PARDIR)/%.o: %.cpp
 	$(CXX) -c -o $@ $(CXXFLAGS) $<
  
 $(PARDIR)/%.o: %.cu
-	$(NVCC) -c -o $@ $(NVCCFLAGS) $(NVCCLIBS) $<
+	$(NVCC) -c -o $@ $(NVCCFLAGS) -dc $<

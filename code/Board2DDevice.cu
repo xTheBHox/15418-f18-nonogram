@@ -2,6 +2,10 @@
 // Created by Benjamin Huang on 11/19/2018.
 //
 
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <driver_functions.h>
+
 #include "Board2DDevice.h"
 
 
@@ -75,7 +79,7 @@ void board2d_cleanup_dev(Board2DDevice *B_host, Board2DDevice *B_dev) {
     size_t B_arr_size = sizeof(NonogramColor) * B_host->w * B_host->h;
     cudaCheckError(cudaMemcpy((void *)B_host->data, B_dev_data_val, B_arr_size, cudaMemcpyDeviceToHost));
 
-    cudaCheckError(cudaFree(B_dev_data));
+    cudaCheckError(cudaFree(B_dev_data_val));
     cudaCheckError(cudaFree((void *)B_dev));
 #else
     return;
@@ -89,15 +93,15 @@ std::ostream &operator<<(std::ostream &os, Board2DDevice *B) {
         for (unsigned c = 0; c < B->w; c++) {
             char sym = 'X';
             switch (board2d_dev_elem_get_rm(B, c, r)) {
-                case NonogramColor::BLACK: {
+                case NGCOLOR_BLACK: {
                     sym = '#';
                     break;
                 }
-                case NonogramColor::UNKNOWN: {
+                case NGCOLOR_UNKNOWN: {
                     sym = '?';
                     break;
                 }
-                case NonogramColor::WHITE: {
+                case NGCOLOR_WHITE: {
                     sym = '.';
                     break;
                 }
@@ -117,7 +121,7 @@ void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColo
     B->dirty = true;
 }
 
-__device__
+__host__ __device__
 NonogramColor board2d_dev_elem_get_rm(Board2DDevice *B, unsigned x, unsigned y) {
     return B->data[y * B->w + x];
 }

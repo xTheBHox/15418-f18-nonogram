@@ -22,7 +22,7 @@ bool parse_input_file_mk(std::string fInput, NonogramLineDevice **Ls, Board2DDev
 #endif
 
     std::fstream F;
-    F.open(fInput);
+    F.open(fInput.c_str(), std::fstream::in);
     if (!F) {
         std::cout << "Input file error" << std::endl;
         return false;
@@ -108,8 +108,9 @@ int main(int argc, char **argv) {
 
     int c;
     std::string fInput;
-    Board2DDevice *B = nullptr;
-    NonogramLineDevice *Ls = nullptr;
+    bool fFlag = false;
+    Board2DDevice *B = NULL;
+    NonogramLineDevice *Ls = NULL;
     while ((c = getopt(argc, argv, "f:")) != -1) {
         switch (c) {
             case 'f': {
@@ -117,9 +118,15 @@ int main(int argc, char **argv) {
                 if (!parse_input_file_mk(fInput, &Ls, &B)) {
                     return -1;
                 }
+                fFlag = true;
                 break;
             }
         }
+    }
+
+    if (!fFlag) {
+        std::cout << "File not specified" << std::endl;
+        return -1;
     }
 
     std::cout << "Solving..." << std::endl;
