@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 #include <unistd.h>
@@ -130,8 +131,9 @@ int main(int argc, char **argv) {
     }
 
     std::cout << "Solving..." << std::endl;
+    TIMER_START(ng_solve);
     ng_solve(Ls, B);
-
+    TIMER_STOP(ng_solve);
     std::cout << "Completed." << std::endl;
     std::cout << B;
     // Cleanup

@@ -2,10 +2,6 @@
 // Created by Benjamin Huang on 11/19/2018.
 //
 
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <driver_functions.h>
-
 #include "Board2DDevice.h"
 
 
@@ -48,9 +44,9 @@ Board2DDevice *board2d_init_dev(Board2DDevice *B_host) {
     size_t B_arr_size = sizeof(NonogramColor) * B_host->w * B_host->h;
 
     *B_tmp = *B_host;
-    cudaCheckError(cudaMalloc((void **)&(B_tmp->data), B_arr_size));
-    cudaCheckError(cudaMemcpy((void *)B_tmp->data, (void *)B_host->data, B_arr_size, cudaMemcpyHostToDevice));
-    B_tmp->dataCM = B_tmp->data + B_host->w * B_host->h;
+    cudaCheckError(cudaMalloc((void **)&(B_tmp->data), 2 * B_arr_size));
+    cudaCheckError(cudaMemcpy((void *)B_tmp->data, (void *)B_host->data, 2 * B_arr_size, cudaMemcpyHostToDevice));
+    B_tmp->dataCM = &B_tmp->data[B_host->w * B_host->h];
 
     cudaCheckError(cudaMalloc(&B_dev, sizeof(Board2DDevice)));
     cudaCheckError(cudaMemcpy(B_dev, (void *)B_tmp, sizeof(Board2DDevice), cudaMemcpyHostToDevice));

@@ -1,9 +1,6 @@
 //
 // Created by Benjamin Huang on 11/19/2018.
 //
-#include <cuda.h>
-#include <cuda_runtime.h>
-
 #include "NonogramLineDevice.h"
 
 __device__
@@ -385,6 +382,8 @@ void ng_solve(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
     std::cout << "Lines initializing..." << std::endl;
 #endif
 
+    TIMER_START(solve_loop);
+
 #ifdef __NVCC__
     ngline_init_kernel<<<block_cnt, 1>>>(B_dev, Ls_dev);
 #else
@@ -416,9 +415,10 @@ void ng_solve(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
 
 #ifdef PERF
         perf_iter_cnt++;
-        std::cout << "Iteration " << perf_iter_cnt << std::endl;
 #endif
     } while (B_host->dirty);
+
+    TIMER_STOP(solve_loop);
 
 #ifdef PERF
     std::cout << "Total iterations: " << perf_iter_cnt << std::endl;
