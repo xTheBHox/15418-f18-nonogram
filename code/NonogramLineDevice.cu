@@ -184,6 +184,99 @@ void ngline_dev_topEnd_propagate(NonogramLineDevice *L, Board2DDevice *B,
 }
 
 __device__
+void ngline_dev_update2(NonogramLineDevice *L, Board2DDevice *B) {
+
+    NonogramColor currColor = NGCOLOR_WHITE;
+
+    unsigned currBlockLen;
+
+    unsigned i = L->b_runs[0].topEnd - L->constr[0];
+
+    unsigned prev_wi = i;
+    unsigned prev_bi = i;
+
+
+    if (L->constr_len == 0) return;
+
+    // Walk down the line, and fill in the run structures
+    unsigned ri0 = 0; // The minimum index black run we could be in
+    unsigned ri1 = 0; // The maximum index black run we could be in
+
+    unsigned curr_bblock_len = 0;
+    // unsigned first_nwi = 0;
+
+    // Walk
+    unsigned i = L->b_runs[0].topEnd - L->constr[0];
+    for (; i < L->len; i++) {
+
+        char color = L->data[i];
+        if (color == NGCOLOR_BLACK) {
+            curr_bblock_len++;
+        }
+        else if (color == NGCOLOR_WHITE) {
+            curr_bblock_len = 0;
+            // first_nwi = i + 1;
+        }
+        else {
+            curr_bblock_len = 0;
+            continue;
+        }
+
+        while (i >= L->b_runs[ri0].botStart + L->constr[ri0]) ri0++;
+
+        unsigned max_run_len = 0;
+        for (unsigned j = ri0; j <= ri1; j++) {
+            if (max_run_len < L->constr[j]) max_run_len = L->constr[j];
+        }
+        while (ri1 + 1 < L->constr_len && i >= L->b_runs[ri1 + 1].topEnd - L->constr[ri1 + 1]) {
+            ri1++;
+            if (max_run_len < L->constr[ri1]) max_run_len = L->constr[ri1];
+        }
+
+        if (ri0 == L->constr_len) {
+            // We have finished all the shaded regions
+            break;
+        }
+
+        // Check if we are in an already confirmed shaded region
+        if (L->b_runs[ri0].botStart <= i && i < L->b_runs[ri0].topEnd) {
+            continue;
+        }
+
+        // Check if we are in an already confirmed unshaded region
+        if (ri0 > ri1) continue;
+
+        // If we get here, we have a determined cell that has not been assigned to a run.
+
+        // Try to assign to a run.
+        if (color == NGCOLOR_BLACK) {
+            if (ri0 == ri1) { // Can fix
+
+                ngline_dev_botStart_propagate(L, B, ri0, i);
+                ngline_dev_topEnd_propagate(L, B, ri0, i + 1);
+
+            }
+        }
+        else { // if (color == Nonogram::Color::WHITE) {
+            if (i >= L->b_runs[ri0].botStart) {
+                ngline_dev_botStart_propagate(L, B, ri0, i - L->constr[ri0]);
+            }
+            if (i < L->b_runs[ri1].topEnd) {
+                ngline_dev_topEnd_propagate(L, B, ri1, i + L->constr[ri1] + 1);
+            }
+        }
+
+        // We are looking for shaded blocks that have not been assigned to a run.
+        if (curr_bblock_len == max_run_len) {
+            ngline_dev_block_max_size_fill(L, B, i, curr_bblock_len);
+        }
+
+    }
+
+
+}
+
+__device__
 void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
                            NonogramColor color, unsigned i) {
     if (L->data[i] != color) {
