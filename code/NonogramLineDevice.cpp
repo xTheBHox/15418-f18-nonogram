@@ -2,7 +2,9 @@
 // Created by Benjamin Huang on 11/19/2018.
 //
 #include "NonogramLineDevice.h"
+#include "Board2DDevice.h"
 
+#define DEBUG
 __device__
 void ngline_init_dev(NonogramLineDevice *L) {
 
@@ -149,6 +151,222 @@ void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B) {
     }
 }
 
+__device__ __inline__
+bool ngline_dev_run_top_adjust(NonogramLineDevice *L, unsigned &topEnd, unsigned line_len, unsigned run_len) {
+
+    if (topEnd < line_len && L->data[topEnd] == NGCOLOR_BLACK) {
+        topEnd++;
+        return true;
+    }
+
+    for (unsigned i = topEnd; i > topEnd - run_len; i--) {
+        if (L->data[i - 1] == NGCOLOR_WHITE) {
+            topEnd = i + run_len;
+            return true;
+        }
+    }
+
+    if (topEnd > run_len && L->data[topEnd - run_len - 1] == NGCOLOR_BLACK) {
+        topEnd++;
+        return true;
+    }
+
+    return false;
+
+}
+
+__device__ __inline__
+bool ngline_dev_run_bot_adjust(NonogramLineDevice *L, unsigned &botStart, unsigned line_len, unsigned run_len) {
+
+    if (botStart > 0 && L->data[botStart - 1] == NGCOLOR_BLACK) {
+        botStart--;
+        return true;
+    }
+
+    for (unsigned i = botStart; i < botStart + run_len; i++) {
+        if (L->data[i] == NGCOLOR_WHITE) {
+            botStart = i - run_len;
+            return true;
+        }
+    }
+
+    if (botStart + run_len < line_len && L->data[botStart + run_len] == NGCOLOR_BLACK) {
+        botStart--;
+        return true;
+    }
+
+    return false;
+
+}
+
+__device__ __inline__
+void ngline_dev_run_top_prop(NonogramLineDevice *L) {
+
+    for (unsigned ri = 1; ri < L->constr_len; ri++) {
+        L->b_runs[ri].topEnd = std::max(L->b_runs[ri].topEnd, L->b_runs[ri-1].topEnd + L->constr[ri] + 1);
+    }
+
+}
+
+__device__ __inline__
+void ngline_dev_run_bot_prop(NonogramLineDevice *L) {
+
+    for (unsigned ri = L->constr_len - 2; ri < L->constr_len; ri--) {
+        L->b_runs[ri].botStart = std::min(L->b_runs[ri].botStart, L->b_runs[ri+1].botStart - L->constr[ri] - 1);
+    }
+
+}
+
+
+__device__ __inline__
+void ngline_dev_run_fill_black(NonogramLineDevice *L, Board2DDevice *B, const BRun *R, unsigned run_len) {
+
+    for (unsigned i = R->botStart; i < R->topEnd; i++) {
+        ngline_dev_cell_solve(L, B, NGCOLOR_BLACK, i);
+    }
+    if (R->topEnd == R->botStart + run_len) {
+        if (R->topEnd < L->len) ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, R->topEnd);
+        if (R->botStart > 0) ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, R->botStart - 1);
+    }
+
+}
+
+__device__ __inline__
+void ngline_dev_run_fill_white(NonogramLineDevice *L, Board2DDevice *B, unsigned ri) {
+// ri is the index of the black run after the white area
+    unsigned prevBotEnd;
+    unsigned topStart;
+    if (ri == 0) {
+        prevBotEnd = 0;
+    }
+    else {
+        prevBotEnd = L->b_runs[ri - 1].botStart + L->constr[ri - 1];
+    }
+    if (ri == L->constr_len) {
+        topStart = L->len;
+    }
+    else {
+        topStart = L->b_runs[ri].topEnd - L->constr[ri];
+    }
+
+    for (unsigned i = prevBotEnd; i < topStart; i++) {
+        ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, i);
+    }
+
+}
+
+__device__
+void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned run_index) {
+
+#ifdef DEBUG
+    if (run_index >= L->constr_len) return;
+#endif
+
+    BRun *R = &L->b_runs[run_index];
+    unsigned run_len = L->constr[run_index];
+
+    // Adjust the possible start and end points of the runs
+
+    while(ngline_dev_run_top_adjust(L, R->topEnd, run_len, L->constr[run_index]));
+    while(ngline_dev_run_bot_adjust(L, R->botStart, run_len, L->constr[run_index]));
+
+    // Propagate changes - one thread only!
+
+    ngline_dev_run_top_prop(L);
+    ngline_dev_run_bot_prop(L);
+
+    // Fill overlaps
+
+    ngline_dev_run_fill_black(L, B, R, run_len);
+    ngline_dev_run_fill_white(L, B, run_index);
+    if (run_index == 0) ngline_dev_run_fill_white(L, B, L->constr_len);
+
+}
+
+__device__
+void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
+
+    unsigned block_topStart = 0;
+    unsigned block_start;
+    unsigned block_end;
+    unsigned block_botEnd = 0;
+    unsigned ri_first = 0;
+    unsigned ri_last = 0;
+    unsigned i = 0;
+
+    while (i < L->len) {
+
+        if (L->data[i] == NGCOLOR_UNKNOWN) {
+            i++;
+            continue;
+        }
+        if (L->data[i] == NGCOLOR_WHITE) {
+            i++;
+            block_topStart = i;
+            continue;
+        }
+        // Must be black
+        block_start = i;
+        while (L->data[i] == NGCOLOR_BLACK) {
+            i++;
+            if (i == L->len) break;
+        }
+        block_end = i;
+        block_botEnd = i;
+        while (block_botEnd < L->len && L->data[block_botEnd] != NGCOLOR_WHITE) block_botEnd++;
+        // Determine the minimum and maximum length of this block
+        unsigned block_len_min = block_end - block_start;
+        unsigned block_len_max = block_botEnd - block_topStart;
+
+        unsigned run_fit_count = 0;
+        // next three are not valid if run_fit_count == 0
+        unsigned run_fit_index = 0;
+        unsigned run_len_min = L->len;
+        unsigned run_len_max = 0;
+
+        // Get the run indices
+        while (L->b_runs[ri_first].botStart + L->constr[ri_first] < block_end) ri_first++;
+        ri_last = ri_first;
+        while (ri_last < L->constr_len && L->b_runs[ri_last].topEnd - L->constr[ri_last] <= block_start) {
+            unsigned run_len = L->constr[ri_last];
+            if (block_len_min < run_len < block_len_max) {
+                if (run_fit_count == 0) {
+                    if (L->b_runs[ri_last].botStart > block_start) {
+                        L->b_runs[ri_last].botStart = block_start;
+                        B->dirty = true;
+                    }
+                }
+                run_fit_count++;
+                run_fit_index = ri_last;
+                run_len_min = std::min(run_len, run_len_min);
+                run_len_max = std::max(run_len, run_len_max);
+            }
+            ri_last++;
+        }
+
+        // TODO If checking for contradiction, must check no possible runs
+        if (L->b_runs[run_fit_index].topEnd < block_end){
+            L->b_runs[run_fit_index].topEnd = block_end;
+            B->dirty = true;
+        }
+
+        while (block_end < block_topStart + run_len_min) {
+            ngline_dev_cell_solve(L, B, NGCOLOR_BLACK, block_end);
+            block_end++;
+        }
+        while (block_start > block_botEnd - run_len_min) {
+            block_start--;
+            ngline_dev_cell_solve(L, B, NGCOLOR_BLACK, block_start);
+        }
+        if (block_len_min == run_len_max) {
+            if (block_end != L->len) ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, block_end);
+            if (block_start != 0) ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, block_start - 1);
+        }
+
+    }
+
+}
+
 __device__
 void ngline_dev_block_max_size_fill(NonogramLineDevice *L, Board2DDevice *B,
                          unsigned i, unsigned curr_bblock_len) {
@@ -206,7 +424,6 @@ void ngline_dev_update2(NonogramLineDevice *L, Board2DDevice *B) {
     // unsigned first_nwi = 0;
 
     // Walk
-    unsigned i = L->b_runs[0].topEnd - L->constr[0];
     for (; i < L->len; i++) {
 
         char color = L->data[i];
@@ -302,8 +519,10 @@ void ngline_row_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned 
 #endif
 
     NonogramLineDevice *L = &Ls[i];
-    ngline_dev_update(L, B);
-    ngline_dev_runs_fill(L, B);
+    for (unsigned ri = 0; ri < L->constr_len; ri++) {
+        ngline_dev_run_solve(L, B, ri);
+    }
+    ngline_dev_block_solve(L, B);
 
 }
 
@@ -316,8 +535,10 @@ void ngline_col_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned 
 #endif
 
     NonogramLineDevice *L = &Ls[B->h + i];
-    ngline_dev_update(L, B);
-    ngline_dev_runs_fill(L, B);
+    for (unsigned ri = 0; ri < L->constr_len; ri++) {
+        ngline_dev_run_solve(L, B, ri);
+    }
+    ngline_dev_block_solve(L, B);
 
 }
 
@@ -504,6 +725,7 @@ void ng_solve(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
         for (unsigned i = 0; i < B_host->w; i++) {
             ngline_col_solve_kernel(B_dev, Ls_dev, i);
         }
+
 #endif
 
 #ifdef PERF

@@ -6,7 +6,7 @@
 #include <vector>
 
 // #define PERF
-// #define DEBUG
+#define DEBUG
 // #define __NVCC__
 
 #include "Defs.h"

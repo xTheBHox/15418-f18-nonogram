@@ -20,6 +20,13 @@ typedef struct {
 } BRun;
 
 typedef struct {
+    unsigned topStart;
+    unsigned start;
+    unsigned end;
+    unsigned botEnd;
+} BBlock;
+
+typedef struct {
 
     unsigned len;
     bool line_is_row;
