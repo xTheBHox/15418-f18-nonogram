@@ -4,7 +4,25 @@
 #include "NonogramLineDevice.h"
 #include "Board2DDevice.h"
 
-#define DEBUG
+//#define DEBUG
+
+__device__
+void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
+                           NonogramColor color, unsigned i) {
+    if (L->data[i] != color) {
+        unsigned x, y;
+        if (L->line_is_row) {
+            y = L->line_index;
+            x = i;
+        }
+        else {
+            x = L->line_index;
+            y = i;
+        }
+        board2d_dev_elem_set(B, x, y, color);
+    }
+}
+
 __device__
 void ngline_init_dev(NonogramLineDevice *L) {
 
@@ -40,115 +58,6 @@ void ngline_init_dev(NonogramLineDevice *L) {
     printf("botSum=%d\n", botSum);
 #endif
 #endif
-}
-
-__device__
-void ngline_dev_runs_fill(NonogramLineDevice *L, Board2DDevice *B) {
-
-    unsigned prev_wrun_botStart = 0;
-
-    for (unsigned ri = 0; ri < L->constr_len; ri++) {
-        BRun r = L->b_runs[ri];
-
-        while (r.topEnd - L->constr[ri] > prev_wrun_botStart) {
-            ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, prev_wrun_botStart);
-            prev_wrun_botStart++;
-        }
-
-        for (unsigned i = r.botStart; i < r.topEnd; i++) {
-            ngline_dev_cell_solve(L, B, NGCOLOR_BLACK, i);
-        }
-
-        prev_wrun_botStart = r.botStart + L->constr[ri];
-
-    }
-
-    while (prev_wrun_botStart < L->len) {
-        ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, prev_wrun_botStart);
-        prev_wrun_botStart++;
-    }
-
-}
-
-__device__
-void ngline_dev_update(NonogramLineDevice *L, Board2DDevice *B) {
-
-    if (L->constr_len == 0) return;
-
-    // Walk down the line, and fill in the run structures
-    unsigned ri0 = 0; // The minimum index black run we could be in
-    unsigned ri1 = 0; // The maximum index black run we could be in
-
-    unsigned curr_bblock_len = 0;
-    // unsigned first_nwi = 0;
-
-    // Walk
-    unsigned i = L->b_runs[0].topEnd - L->constr[0];
-    for (; i < L->len; i++) {
-
-        char color = L->data[i];
-        if (color == NGCOLOR_BLACK) {
-            curr_bblock_len++;
-        }
-        else if (color == NGCOLOR_WHITE) {
-            curr_bblock_len = 0;
-            // first_nwi = i + 1;
-        }
-        else {
-            curr_bblock_len = 0;
-            continue;
-        }
-
-        while (i >= L->b_runs[ri0].botStart + L->constr[ri0]) ri0++;
-
-        unsigned max_run_len = 0;
-        for (unsigned j = ri0; j <= ri1; j++) {
-            if (max_run_len < L->constr[j]) max_run_len = L->constr[j];
-        }
-        while (ri1 + 1 < L->constr_len && i >= L->b_runs[ri1 + 1].topEnd - L->constr[ri1 + 1]) {
-            ri1++;
-            if (max_run_len < L->constr[ri1]) max_run_len = L->constr[ri1];
-        }
-
-        if (ri0 == L->constr_len) {
-            // We have finished all the shaded regions
-            break;
-        }
-
-        // Check if we are in an already confirmed shaded region
-        if (L->b_runs[ri0].botStart <= i && i < L->b_runs[ri0].topEnd) {
-            continue;
-        }
-
-        // Check if we are in an already confirmed unshaded region
-        if (ri0 > ri1) continue;
-
-        // If we get here, we have a determined cell that has not been assigned to a run.
-
-        // Try to assign to a run.
-        if (color == NGCOLOR_BLACK) {
-            if (ri0 == ri1) { // Can fix
-
-                ngline_dev_botStart_propagate(L, B, ri0, i);
-                ngline_dev_topEnd_propagate(L, B, ri0, i + 1);
-
-            }
-        }
-        else { // if (color == Nonogram::Color::WHITE) {
-            if (i >= L->b_runs[ri0].botStart) {
-                ngline_dev_botStart_propagate(L, B, ri0, i - L->constr[ri0]);
-            }
-            if (i < L->b_runs[ri1].topEnd) {
-                ngline_dev_topEnd_propagate(L, B, ri1, i + L->constr[ri1] + 1);
-            }
-        }
-
-        // We are looking for shaded blocks that have not been assigned to a run.
-        if (curr_bblock_len == max_run_len) {
-            ngline_dev_block_max_size_fill(L, B, i, curr_bblock_len);
-        }
-
-    }
 }
 
 __device__ __inline__
@@ -286,6 +195,8 @@ void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned run_
 __device__
 void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
 
+    if (L->solved) return;
+
     unsigned block_topStart = 0;
     unsigned block_start;
     unsigned block_end;
@@ -294,285 +205,101 @@ void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
     unsigned ri_last = 0;
     unsigned i = 0;
 
+    bool solved = true;
+
     while (i < L->len) {
 
         if (L->data[i] == NGCOLOR_UNKNOWN) {
+            // No blocks to solve here
             i++;
+            solved = false;
             continue;
         }
         if (L->data[i] == NGCOLOR_WHITE) {
+            // White blocks, nothing to solve
             i++;
             block_topStart = i;
             continue;
         }
-        // Must be black
+
+        // At this point we have reached a shaded block
         block_start = i;
         while (L->data[i] == NGCOLOR_BLACK) {
+            // Find the end of the shaded block
             i++;
             if (i == L->len) break;
         }
         block_end = i;
         block_botEnd = i;
+        // Find the next white block (to determine the maximum possible extent of the shaded block
         while (block_botEnd < L->len && L->data[block_botEnd] != NGCOLOR_WHITE) block_botEnd++;
         // Determine the minimum and maximum length of this block
         unsigned block_len_min = block_end - block_start;
         unsigned block_len_max = block_botEnd - block_topStart;
 
+        // The number of runs that will fit this block
         unsigned run_fit_count = 0;
         // next three are not valid if run_fit_count == 0
-        unsigned run_fit_index = 0;
-        unsigned run_len_min = L->len;
-        unsigned run_len_max = 0;
+        unsigned run_fit_index = 0; // The bottom-most fitting run
+        unsigned run_len_min = L->len; // The minimum length of all the fitting runs
+        unsigned run_len_max = 0; // The maximum length of all the fitting runs
 
-        // Get the run indices
+        // Get the run valid run indexes
         while (L->b_runs[ri_first].botStart + L->constr[ri_first] < block_end) ri_first++;
         ri_last = ri_first;
         while (ri_last < L->constr_len && L->b_runs[ri_last].topEnd - L->constr[ri_last] <= block_start) {
             unsigned run_len = L->constr[ri_last];
+            // Check that the run length will fit the block
             if (block_len_min < run_len < block_len_max) {
                 if (run_fit_count == 0) {
+                    // Make the topmost possible run start no later than this run
                     if (L->b_runs[ri_last].botStart > block_start) {
                         L->b_runs[ri_last].botStart = block_start;
                         B->dirty = true;
                     }
+                    run_len_min = run_len;
+                    run_len_max = run_len;
+                }
+                else {
+                    run_len_min = std::min(run_len, run_len_min);
+                    run_len_max = std::max(run_len, run_len_max);
                 }
                 run_fit_count++;
                 run_fit_index = ri_last;
-                run_len_min = std::min(run_len, run_len_min);
-                run_len_max = std::max(run_len, run_len_max);
             }
             ri_last++;
         }
 
         // TODO If checking for contradiction, must check no possible runs
+        // Make the bottommost possible run start no earlier than this run
         if (L->b_runs[run_fit_index].topEnd < block_end){
             L->b_runs[run_fit_index].topEnd = block_end;
             B->dirty = true;
         }
 
         while (block_end < block_topStart + run_len_min) {
+            // If the minimum run length puts the last cell in the shortest possible run further right
+            // than the last cell in the block, fill up in between.
             ngline_dev_cell_solve(L, B, NGCOLOR_BLACK, block_end);
             block_end++;
         }
         while (block_start > block_botEnd - run_len_min) {
+            // If the minimum run length puts the first cell in the shortest possible run further left
+            // than the first cell in the block, fill up in between.
             block_start--;
             ngline_dev_cell_solve(L, B, NGCOLOR_BLACK, block_start);
         }
         if (block_len_min == run_len_max) {
+            // If the block is already the maximum run length, then fill up white around it.
             if (block_end != L->len) ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, block_end);
             if (block_start != 0) ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, block_start - 1);
         }
 
     }
 
-}
-
-__device__
-void ngline_dev_block_max_size_fill(NonogramLineDevice *L, Board2DDevice *B,
-                         unsigned i, unsigned curr_bblock_len) {
-    if (i + 1 < L->len) {
-        ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, i + 1);
-    }
-    if (i >= curr_bblock_len) {
-        ngline_dev_cell_solve(L, B, NGCOLOR_WHITE, i - curr_bblock_len);
-    }
+    if (solved) L->solved = true;
 
 }
-
-__device__
-void ngline_dev_botStart_propagate(NonogramLineDevice *L, Board2DDevice *B,
-                                      unsigned ri, unsigned i) {
-    while (i < L->b_runs[ri].botStart) {
-        L->b_runs[ri].botStart = i;
-        if (ri == 0) break;
-        ri--;
-        i -= L->constr[ri] + 1;
-    }
-}
-
-__device__
-void ngline_dev_topEnd_propagate(NonogramLineDevice *L, Board2DDevice *B,
-                                    unsigned ri, unsigned i) {
-    while (i > L->b_runs[ri].topEnd) {
-        L->b_runs[ri].topEnd = i;
-        ri++;
-        if (ri == L->constr_len) break;
-        i += L->constr[ri] + 1;
-    }
-}
-
-__device__
-void ngline_dev_update2(NonogramLineDevice *L, Board2DDevice *B) {
-
-    NonogramColor currColor = NGCOLOR_WHITE;
-
-    unsigned currBlockLen;
-
-    unsigned i = L->b_runs[0].topEnd - L->constr[0];
-
-    unsigned prev_wi = i;
-    unsigned prev_bi = i;
-
-
-    if (L->constr_len == 0) return;
-
-    // Walk down the line, and fill in the run structures
-    unsigned ri0 = 0; // The minimum index black run we could be in
-    unsigned ri1 = 0; // The maximum index black run we could be in
-
-    unsigned curr_bblock_len = 0;
-    // unsigned first_nwi = 0;
-
-    // Walk
-    for (; i < L->len; i++) {
-
-        char color = L->data[i];
-        if (color == NGCOLOR_BLACK) {
-            curr_bblock_len++;
-        }
-        else if (color == NGCOLOR_WHITE) {
-            curr_bblock_len = 0;
-            // first_nwi = i + 1;
-        }
-        else {
-            curr_bblock_len = 0;
-            continue;
-        }
-
-        while (i >= L->b_runs[ri0].botStart + L->constr[ri0]) ri0++;
-
-        unsigned max_run_len = 0;
-        for (unsigned j = ri0; j <= ri1; j++) {
-            if (max_run_len < L->constr[j]) max_run_len = L->constr[j];
-        }
-        while (ri1 + 1 < L->constr_len && i >= L->b_runs[ri1 + 1].topEnd - L->constr[ri1 + 1]) {
-            ri1++;
-            if (max_run_len < L->constr[ri1]) max_run_len = L->constr[ri1];
-        }
-
-        if (ri0 == L->constr_len) {
-            // We have finished all the shaded regions
-            break;
-        }
-
-        // Check if we are in an already confirmed shaded region
-        if (L->b_runs[ri0].botStart <= i && i < L->b_runs[ri0].topEnd) {
-            continue;
-        }
-
-        // Check if we are in an already confirmed unshaded region
-        if (ri0 > ri1) continue;
-
-        // If we get here, we have a determined cell that has not been assigned to a run.
-
-        // Try to assign to a run.
-        if (color == NGCOLOR_BLACK) {
-            if (ri0 == ri1) { // Can fix
-
-                ngline_dev_botStart_propagate(L, B, ri0, i);
-                ngline_dev_topEnd_propagate(L, B, ri0, i + 1);
-
-            }
-        }
-        else { // if (color == Nonogram::Color::WHITE) {
-            if (i >= L->b_runs[ri0].botStart) {
-                ngline_dev_botStart_propagate(L, B, ri0, i - L->constr[ri0]);
-            }
-            if (i < L->b_runs[ri1].topEnd) {
-                ngline_dev_topEnd_propagate(L, B, ri1, i + L->constr[ri1] + 1);
-            }
-        }
-
-        // We are looking for shaded blocks that have not been assigned to a run.
-        if (curr_bblock_len == max_run_len) {
-            ngline_dev_block_max_size_fill(L, B, i, curr_bblock_len);
-        }
-
-    }
-
-
-}
-
-__device__
-void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
-                           NonogramColor color, unsigned i) {
-    if (L->data[i] != color) {
-        unsigned x, y;
-        if (L->line_is_row) {
-            y = L->line_index;
-            x = i;
-        }
-        else {
-            x = L->line_index;
-            y = i;
-        }
-        board2d_dev_elem_set(B, x, y, color);
-    }
-}
-
-#ifdef __NVCC__
-__global__
-void ngline_row_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls) {
-    unsigned i = blockIdx.x;
-#else
-void ngline_row_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned i) {
-#endif
-
-    NonogramLineDevice *L = &Ls[i];
-    for (unsigned ri = 0; ri < L->constr_len; ri++) {
-        ngline_dev_run_solve(L, B, ri);
-    }
-    ngline_dev_block_solve(L, B);
-
-}
-
-#ifdef __NVCC__
-__global__
-void ngline_col_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls) {
-    unsigned i = blockIdx.x;
-#else
-void ngline_col_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned i) {
-#endif
-
-    NonogramLineDevice *L = &Ls[B->h + i];
-    for (unsigned ri = 0; ri < L->constr_len; ri++) {
-        ngline_dev_run_solve(L, B, ri);
-    }
-    ngline_dev_block_solve(L, B);
-
-}
-
-#ifdef __NVCC__
-__global__
-void ngline_init_kernel(Board2DDevice *B, NonogramLineDevice *Ls) {
-    unsigned i = blockIdx.x;
-#else
-void ngline_init_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned i) {
-#endif
-
-    NonogramLineDevice *L = &Ls[i];
-
-    if (L->line_is_row) {
-        L->data = board2d_dev_row_ptr_get(B, L->line_index);
-#ifndef __NVCC__
-#ifdef DEBUG
-        printf("Init row %d len=%d constr_len=%d\t", L->line_index, L->len, L->constr_len);
-#endif
-#endif
-    }
-    else {
-        L->data = board2d_dev_col_ptr_get(B, L->line_index);
-#ifndef __NVCC__
-#ifdef DEBUG
-        printf("Init col %d len=%d constr_len=%d\t", L->line_index, L->len, L->constr_len);
-#endif
-#endif
-    }
-
-    ngline_init_dev(L);
-
-}
-
 
 bool ng_linearr_init_host(unsigned w, unsigned h, NonogramLineDevice **Ls) {
 
@@ -591,6 +318,7 @@ bool ng_linearr_init_host(unsigned w, unsigned h, NonogramLineDevice **Ls) {
         Ls_tmp[i].line_index = i;
         Ls_tmp[i].line_is_row = true;
         Ls_tmp[i].len = w;
+        Ls_tmp[i].solved = false;
     }
 
     for (unsigned i = 0; i < w; i++) {
@@ -598,6 +326,7 @@ bool ng_linearr_init_host(unsigned w, unsigned h, NonogramLineDevice **Ls) {
         Ls_tmp[i + h].line_index = i;
         Ls_tmp[i + h].line_is_row = false;
         Ls_tmp[i + h].len = h;
+        Ls_tmp[i + h].solved = false;
     }
 
     *Ls = Ls_tmp;
@@ -634,112 +363,18 @@ void ng_linearr_free_dev(NonogramLineDevice *Ls_dev) {
 
 }
 
-bool ng_init(unsigned w, unsigned h, NonogramLineDevice **Ls, Board2DDevice **B) {
+NonogramLineDevice *ng_linearr_deepcopy_host(NonogramLineDevice *Ls, unsigned w, unsigned h) {
 
-    if (!ng_linearr_init_host(w, h, Ls)) return false;
-    *B = board2d_init_host(w, h);
-    if (*B == NULL) return false;
-    return true;
+    unsigned Ls_len = w + h;
+    size_t Ls_size = sizeof(NonogramLineDevice) * Ls_len;
+    NonogramLineDevice *Ls_copy = (NonogramLineDevice *)malloc(Ls_size);
 
-}
-
-void ng_free(NonogramLineDevice *Ls, Board2DDevice *B) {
-
-    free(Ls);
-    board2d_free_host(B);
-
-}
-
-bool ng_constr_add(NonogramLineDevice *Ls, unsigned line_index, unsigned constr) {
-
-    NonogramLineDevice *L = &Ls[line_index];
-
-    if (L->constr_len >= MAX_RUNS) {
-        return false;
+    if (Ls_copy == NULL) {
+        fprintf(stderr, "Failed to allocate copy of line array\n");
+        return NULL;
     }
 
-    L->constr[L->constr_len] = constr;
-    L->constr_len++;
-
-    return true;
-
-}
-
-void ng_solve(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
-#ifdef DEBUG
-    std::cout << "ng_solve called" << std::endl;
-#endif
-#ifdef PERF
-    unsigned perf_iter_cnt = 0;
-#endif
-
-    NonogramLineDevice *Ls_dev;
-    Board2DDevice *B_dev;
-
-    // Move structures to device memory
-
-#ifdef DEBUG
-    std::cout << "Line array initializing..." << std::endl;
-#endif
-    Ls_dev = ng_linearr_init_dev(B_host->w, B_host->h, Ls_host);
-
-#ifdef DEBUG
-    std::cout << "Board initializing..." << std::endl;
-#endif
-    B_dev = board2d_init_dev(B_host);
-
-    // Initialize the runs
-
-    unsigned block_cnt = B_host->w + B_host->h;
-
-#ifdef DEBUG
-    std::cout << "Lines initializing..." << std::endl;
-#endif
-
-    TIMER_START(solve_loop);
-
-#ifdef __NVCC__
-    ngline_init_kernel<<<block_cnt, 1>>>(B_dev, Ls_dev);
-#else
-    for (unsigned i = 0; i < block_cnt; i++) {
-        ngline_init_kernel(B_dev, Ls_dev, i);
-    }
-#endif
-
-#ifdef DEBUG
-    std::cout << "Lines alternating..." << std::endl;
-#endif
-
-    do {
-
-        B_host->dirty = false;
-#ifdef __NVCC__
-        cudaMemcpy(&B_dev->dirty, &B_host->dirty, sizeof(bool), cudaMemcpyHostToDevice);
-        ngline_row_solve_kernel<<<B_host->h, 1>>> (B_dev, Ls_dev);
-        ngline_col_solve_kernel<<<B_host->w, 1>>> (B_dev, Ls_dev);
-        cudaMemcpy(&B_host->dirty, &B_dev->dirty, sizeof(bool), cudaMemcpyDeviceToHost);
-#else
-        for (unsigned i = 0; i < B_host->h; i++) {
-            ngline_row_solve_kernel(B_dev, Ls_dev, i);
-        }
-        for (unsigned i = 0; i < B_host->w; i++) {
-            ngline_col_solve_kernel(B_dev, Ls_dev, i);
-        }
-
-#endif
-
-#ifdef PERF
-        perf_iter_cnt++;
-#endif
-    } while (B_host->dirty);
-
-    TIMER_STOP(solve_loop);
-
-#ifdef PERF
-    std::cout << "Total iterations: " << perf_iter_cnt << std::endl;
-#endif
-
-    board2d_cleanup_dev(B_host, B_dev);
-    ng_linearr_free_dev(Ls_dev);
+    memcpy((void *)Ls_copy, (void *)Ls, Ls_size);
+    return Ls_copy;
 
 }

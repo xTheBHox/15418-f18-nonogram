@@ -6,13 +6,14 @@
 #include <vector>
 
 // #define PERF
-#define DEBUG
+// #define DEBUG
 // #define __NVCC__
 
 #include "Defs.h"
 
 #include "Board2DDevice.h"
 #include "NonogramLineDevice.h"
+#include "Solver.h"
 
 #define BUFLEN 255
 

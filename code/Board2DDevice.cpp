@@ -4,7 +4,6 @@
 
 #include "Board2DDevice.h"
 
-
 Board2DDevice *board2d_init_host(unsigned w, unsigned h) {
 
     // Allocate the board header
@@ -83,6 +82,14 @@ void board2d_cleanup_dev(Board2DDevice *B_host, Board2DDevice *B_dev) {
 
 }
 
+Board2DDevice *board2d_deepcopy_host(Board2DDevice *B) {
+
+    Board2DDevice *B_copy = board2d_init_host(B->w, B->h);
+    memcpy((void *)B_copy->data, (void *)B->data, 2 * B->w * B->h * sizeof(NonogramColor));
+    return B_copy;
+
+}
+
 std::ostream &operator<<(std::ostream &os, Board2DDevice *B) {
 
     for (unsigned r = 0; r < B->h; r++) {
@@ -118,21 +125,21 @@ void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColo
 }
 
 __host__ __device__
-NonogramColor board2d_dev_elem_get_rm(Board2DDevice *B, unsigned x, unsigned y) {
+NonogramColor board2d_dev_elem_get_rm(const Board2DDevice *B, unsigned x, unsigned y) {
     return B->data[y * B->w + x];
 }
 
 __device__
-NonogramColor board2d_dev_elem_get_cm(Board2DDevice *B, unsigned x, unsigned y) {
+NonogramColor board2d_dev_elem_get_cm(const Board2DDevice *B, unsigned x, unsigned y) {
     return B->dataCM[x * B->h + y];
 }
 
 __device__
-NonogramColor *board2d_dev_row_ptr_get(Board2DDevice *B, unsigned index) {
+NonogramColor *board2d_dev_row_ptr_get(const Board2DDevice *B, unsigned index) {
     return &B->data[index * B->w];
 }
 
 __device__
-NonogramColor *board2d_dev_col_ptr_get(Board2DDevice *B, unsigned index) {
+NonogramColor *board2d_dev_col_ptr_get(const Board2DDevice *B, unsigned index) {
     return &B->dataCM[index * B->h];
 }

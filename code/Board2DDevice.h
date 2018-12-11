@@ -20,6 +20,7 @@ typedef struct {
     bool dirty;
     NonogramColor *data;
     NonogramColor *dataCM;
+    bool valid;
 
 } Board2DDevice;
 
@@ -33,6 +34,7 @@ Board2DDevice *board2d_init_host(unsigned w, unsigned h);
 Board2DDevice *board2d_init_dev(Board2DDevice *B_host);
 void board2d_free_host(Board2DDevice *B);
 void board2d_cleanup_dev(Board2DDevice *B_host, Board2DDevice *B_dev);
+Board2DDevice *board2d_deepcopy_host(Board2DDevice *B);
 std::ostream &operator<<(std::ostream &os, Board2DDevice *B);
 
 #endif //CODE_BOARD2DDEVICE_H
