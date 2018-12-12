@@ -173,11 +173,12 @@ void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned run_
 
     BRun *R = &L->b_runs[run_index];
     unsigned run_len = L->constr[run_index];
+    unsigned line_len = L->len;
 
     // Adjust the possible start and end points of the runs
 
-    while(ngline_dev_run_top_adjust(L, R->topEnd, run_len, L->constr[run_index]));
-    while(ngline_dev_run_bot_adjust(L, R->botStart, run_len, L->constr[run_index]));
+    while(ngline_dev_run_top_adjust(L, R->topEnd, line_len, run_len));
+    while(ngline_dev_run_bot_adjust(L, R->botStart, line_len, run_len));
 
     // Propagate changes - one thread only!
 
@@ -194,8 +195,6 @@ void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned run_
 
 __device__
 void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
-
-    if (L->solved) return;
 
     unsigned block_topStart = 0;
     unsigned block_start;
@@ -250,7 +249,7 @@ void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
         while (ri_last < L->constr_len && L->b_runs[ri_last].topEnd - L->constr[ri_last] <= block_start) {
             unsigned run_len = L->constr[ri_last];
             // Check that the run length will fit the block
-            if (block_len_min < run_len < block_len_max) {
+            if (block_len_min <= run_len && run_len <= block_len_max) {
                 if (run_fit_count == 0) {
                     // Make the topmost possible run start no later than this run
                     if (L->b_runs[ri_last].botStart > block_start) {
@@ -376,5 +375,17 @@ NonogramLineDevice *ng_linearr_deepcopy_host(NonogramLineDevice *Ls, unsigned w,
 
     memcpy((void *)Ls_copy, (void *)Ls, Ls_size);
     return Ls_copy;
+
+}
+
+void ng_linearr_board_change(NonogramLineDevice *Ls, Board2DDevice *B) {
+
+    for (unsigned i = 0; i < B->h; i++) {
+        Ls[i].data = board2d_dev_row_ptr_get(B, i);
+    }
+
+    for (unsigned i = 0; i < B->w; i++) {
+        Ls[i + B->h].data = board2d_dev_col_ptr_get(B, i);
+    }
 
 }

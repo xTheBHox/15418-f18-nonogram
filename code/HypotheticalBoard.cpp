@@ -4,6 +4,7 @@
 
 #include "HypotheticalBoard.h"
 #include "NonogramLineDevice.h"
+#include "Board2DDevice.h"
 
 __device__ __inline__
 void nglinehyp_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
@@ -78,11 +79,12 @@ void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned r
 
     BRun *R = &L->b_runs[run_index];
     unsigned run_len = L->constr[run_index];
+    unsigned line_len = L->len;
 
     // Adjust the possible start and end points of the runs
 
-    while(ngline_dev_run_top_adjust(L, R->topEnd, run_len, L->constr[run_index]));
-    while(ngline_dev_run_bot_adjust(L, R->botStart, run_len, L->constr[run_index]));
+    while(ngline_dev_run_top_adjust(L, R->topEnd, line_len, run_len));
+    while(ngline_dev_run_bot_adjust(L, R->botStart, line_len, run_len));
 
     // Propagate changes - one thread only!
 
@@ -99,8 +101,6 @@ void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned r
 
 __device__
 void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
-
-    if (L->solved) return;
 
     unsigned block_topStart = 0;
     unsigned block_start;
@@ -150,12 +150,12 @@ void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
         unsigned run_len_max = 0; // The maximum length of all the fitting runs
 
         // Get the run valid run indexes
-        while (L->b_runs[ri_first].botStart + L->constr[ri_first] < block_end) ri_first++;
+        while (ri_first < L->constr_len && L->b_runs[ri_first].botStart + L->constr[ri_first] < block_end) ri_first++;
         ri_last = ri_first;
         while (ri_last < L->constr_len && L->b_runs[ri_last].topEnd - L->constr[ri_last] <= block_start) {
             unsigned run_len = L->constr[ri_last];
             // Check that the run length will fit the block
-            if (block_len_min < run_len < block_len_max) {
+            if (block_len_min <= run_len && run_len <= block_len_max) {
                 if (run_fit_count == 0) {
                     // Make the topmost possible run start no later than this run
                     if (L->b_runs[ri_last].botStart > block_start) {
@@ -224,9 +224,9 @@ char nghyp_heuristic_get(Heuristic *X, unsigned r, unsigned c) {
     return X->data[nghyp_heuristic_rc2i(X, r, c)];
 }
 
-bool nghyp_heuristic_init(NonogramLineDevice *Ls, Board2DDevice *B, Heuristic *X) {
+bool nghyp_heuristic_init(NonogramLineDevice *Ls, Board2DDevice *B, Heuristic **pX) {
 
-    X = (Heuristic *)malloc(sizeof(Heuristic));
+    Heuristic *X = (Heuristic *)malloc(sizeof(Heuristic));
 
     if (X == NULL) {
         fprintf(stderr, "Failed to allocate heuristic struct\n");
@@ -242,6 +242,8 @@ bool nghyp_heuristic_init(NonogramLineDevice *Ls, Board2DDevice *B, Heuristic *X
         free(X);
         return false;
     }
+
+    *pX = X;
 
     return true;
 
@@ -297,7 +299,7 @@ void nghyp_heuristic_cell(const NonogramLineDevice *Ls, const Board2DDevice *B, 
     if (color_u == NGCOLOR_WHITE && color_d == NGCOLOR_UNKNOWN ||
         color_u == NGCOLOR_UNKNOWN && color_d == NGCOLOR_WHITE) {
 
-        const NonogramLineDevice *L_c = &Ls[X->w + r];
+        const NonogramLineDevice *L_c = &Ls[X->h + c];
         unsigned ri = 0;
         do {
             while (ri < L_c->constr_len && L_c->b_runs[ri].botStart + L_c->constr[ri] <= r) {
@@ -337,6 +339,7 @@ void nghyp_heuristic_update(HypotheticalBoard *H, Heuristic *X, NonogramColor co
     board2d_dev_elem_set(H->B, X->c_max, X->r_max, color);
     H->row = X->r_max;
     H->col = X->c_max;
+    H->guess_color = color;
 
 }
 
@@ -357,6 +360,9 @@ void nghyp_heuristic_max(Heuristic *X) {
     X->r_max = r_max;
     X->c_max = c_max;
 
+    // Clear the heuristic.
+    nghyp_heuristic_set(X, r_max, c_max, -1);
+
 }
 
 HypotheticalBoard nghyp_init(NonogramLineDevice *Ls, Board2DDevice *B) {
@@ -364,7 +370,62 @@ HypotheticalBoard nghyp_init(NonogramLineDevice *Ls, Board2DDevice *B) {
     HypotheticalBoard H;
     H.Ls = ng_linearr_deepcopy_host(Ls, B->w, B->h);
     H.B = board2d_deepcopy_host(B);
+    ng_linearr_board_change(H.Ls, H.B);
 
     return H;
 
+}
+
+void nghyp_free(HypotheticalBoard H) {
+
+    free(H.Ls);
+    board2d_free_host(H.B);
+
+}
+
+void nghyp_hyp_confirm(HypotheticalBoard H, Board2DDevice *B, NonogramLineDevice **Ls) {
+
+    std::swap(H.B->data, B->data);
+    std::swap(H.Ls, *Ls);
+
+}
+
+/**
+ * Checks if there's a contradiction, and modifies the original board.
+ * @param H
+ * @param B
+ * @return
+ */
+bool nghyp_valid_check(HypotheticalBoard *H, Board2DDevice *B) {
+
+    if (H->B->valid) return true;
+
+#ifdef DEBUG
+    if (board2d_dev_elem_get(B, H->col, H->row) != NGCOLOR_UNKNOWN) {
+        fprintf(stderr, "Hypothesis is a conflict\n");
+        return false;
+    }
+#endif
+
+    if (H->guess_color == NGCOLOR_BLACK) board2d_dev_elem_set(B, H->col, H->row, NGCOLOR_WHITE);
+    else if (H->guess_color == NGCOLOR_WHITE) board2d_dev_elem_set(B, H->col, H->row, NGCOLOR_BLACK);
+    B->dirty = true;
+    return false;
+
+}
+
+void nghyp_common_set(HypotheticalBoard *H1, HypotheticalBoard *H2, Board2DDevice *B) {
+
+    for (unsigned r = 0; r < B->h; r++) {
+        for (unsigned c = 0; c < B->w; c++) {
+            if (board2d_dev_elem_get_rm(B, c, r) == NGCOLOR_UNKNOWN) {
+                NonogramColor color = board2d_dev_elem_get_rm(H1->B, c, r);
+                if (color != NGCOLOR_UNKNOWN &&
+                    color == board2d_dev_elem_get_rm(H1->B, c, r)) {
+                    board2d_dev_elem_set(B, c, r, color);
+                    B->dirty = true;
+                }
+            }
+        }
+    }
 }

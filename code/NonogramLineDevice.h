@@ -63,5 +63,6 @@ bool ng_linearr_init_host(unsigned w, unsigned h, NonogramLineDevice **Ls);
 NonogramLineDevice *ng_linearr_init_dev(unsigned w, unsigned h, NonogramLineDevice *Ls_host);
 void ng_linearr_free_dev(NonogramLineDevice *Ls_dev);
 NonogramLineDevice *ng_linearr_deepcopy_host(NonogramLineDevice *Ls, unsigned w, unsigned h);
+void ng_linearr_board_change(NonogramLineDevice *Ls, Board2DDevice *B);
 
 #endif //CODE_NONOGRAMLINEDEVICE_H

@@ -25,10 +25,10 @@ typedef struct {
 } Board2DDevice;
 
 __device__ void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColor val);
-__host__ __device__ NonogramColor board2d_dev_elem_get_rm(Board2DDevice *B, unsigned x, unsigned y);
-__device__ NonogramColor board2d_dev_elem_get_cm(Board2DDevice *B, unsigned x, unsigned y);
-__device__ NonogramColor *board2d_dev_row_ptr_get(Board2DDevice *B, unsigned index);
-__device__ NonogramColor *board2d_dev_col_ptr_get(Board2DDevice *B, unsigned index);
+__host__ __device__ NonogramColor board2d_dev_elem_get_rm(const Board2DDevice *B, unsigned x, unsigned y);
+__device__ NonogramColor board2d_dev_elem_get_cm(const Board2DDevice *B, unsigned x, unsigned y);
+__device__ NonogramColor *board2d_dev_row_ptr_get(const Board2DDevice *B, unsigned index);
+__device__ NonogramColor *board2d_dev_col_ptr_get(const Board2DDevice *B, unsigned index);
 
 Board2DDevice *board2d_init_host(unsigned w, unsigned h);
 Board2DDevice *board2d_init_dev(Board2DDevice *B_host);

@@ -34,7 +34,7 @@ void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B);
 __device__
 void nghyp_heuristic_cell(const NonogramLineDevice *Ls, const Board2DDevice *B, Heuristic *X, unsigned r, unsigned c);
 
-bool nghyp_heuristic_init(NonogramLineDevice *Ls, Board2DDevice *B, Heuristic *X);
+bool nghyp_heuristic_init(NonogramLineDevice *Ls, Board2DDevice *B, Heuristic **X);
 void nghyp_heuristic_free(Heuristic *X);
 
 void nghyp_heuristic_fill(const NonogramLineDevice *Ls, const Board2DDevice *B, Heuristic *X);
@@ -42,7 +42,10 @@ void nghyp_heuristic_update(HypotheticalBoard *H, Heuristic *X, NonogramColor co
 void nghyp_heuristic_max(Heuristic *X);
 
 HypotheticalBoard nghyp_init(NonogramLineDevice *Ls, Board2DDevice *B);
-
+void nghyp_free(HypotheticalBoard H);
+void nghyp_hyp_confirm(HypotheticalBoard H, Board2DDevice *B, NonogramLineDevice **Ls);
+bool nghyp_valid_check(HypotheticalBoard *H, Board2DDevice *B);
+void nghyp_common_set(HypotheticalBoard *H1, HypotheticalBoard *H2, Board2DDevice *B);
 
 
 #endif //CODE_HYPOTHETICALBOARD_H

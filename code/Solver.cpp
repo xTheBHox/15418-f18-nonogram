@@ -3,6 +3,9 @@
 //
 
 #include "Solver.h"
+#include "Board2DDevice.h"
+
+#define DEBUG
 
 #ifdef __NVCC__
 __global__
@@ -50,7 +53,7 @@ void ngline_init_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned i) {
         L->data = board2d_dev_row_ptr_get(B, L->line_index);
 #ifndef __NVCC__
 #ifdef DEBUG
-        printf("Init row %d len=%d constr_len=%d\t", L->line_index, L->len, L->constr_len);
+        printf("Init row %d len=%d constr_len=%d\n", L->line_index, L->len, L->constr_len);
 #endif
 #endif
     }
@@ -58,7 +61,7 @@ void ngline_init_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned i) {
         L->data = board2d_dev_col_ptr_get(B, L->line_index);
 #ifndef __NVCC__
 #ifdef DEBUG
-        printf("Init col %d len=%d constr_len=%d\t", L->line_index, L->len, L->constr_len);
+        printf("Init col %d len=%d constr_len=%d\n", L->line_index, L->len, L->constr_len);
 #endif
 #endif
     }
@@ -105,6 +108,7 @@ bool ng_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 
         for (unsigned i = 0; i < B->h + B->w; i++) {
             NonogramLineDevice *L = &Ls[i];
+            if (L->solved) continue;
             for (unsigned ri = 0; ri < L->constr_len; ri++) {
                 ngline_dev_run_solve(L, B, ri);
             }
@@ -114,6 +118,7 @@ bool ng_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 
         for (unsigned i = 0; i < B->h + B->w; i++) {
             NonogramLineDevice *L = &Ls[i];
+            if (L->solved) continue;
             ngline_dev_block_solve(L, B);
         }
 
@@ -136,17 +141,21 @@ bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 
         for (unsigned i = 0; i < B->h + B->w; i++) {
             NonogramLineDevice *L = &Ls[i];
+            if (L->solved) continue;
             for (unsigned ri = 0; ri < L->constr_len; ri++) {
                 nglinehyp_dev_run_solve(L, B, ri);
             }
+            if (!B->valid) return false;
         }
-
-        if (B->dirty) continue;
 
         for (unsigned i = 0; i < B->h + B->w; i++) {
             NonogramLineDevice *L = &Ls[i];
+            if (L->solved) continue;
             nglinehyp_dev_block_solve(L, B);
+            if (!B->valid) return false;
         }
+
+        std::cout << std::endl << B;
 
     } while (B->dirty);
 
@@ -171,26 +180,83 @@ void ng_solve_seq(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
         ngline_init_kernel(B_dev, Ls_dev, i);
     }
 
-    bool solved = ng_solve_loop(Ls_dev, B_dev);
+    bool solved = false;
 
     while (!solved) {
 
+        solved = ng_solve_loop(Ls_dev, B_dev);
+        if (solved) break;
+
         Heuristic *X;
-        nghyp_heuristic_init(Ls_dev, B_dev, X);
+        nghyp_heuristic_init(Ls_dev, B_dev, &X);
         nghyp_heuristic_fill(Ls_dev, B_dev, X);
-        nghyp_heuristic_max(X);
 
-        HypotheticalBoard H_b = nghyp_init(Ls_dev, B_dev);
-        nghyp_heuristic_update(&H_b, X, NGCOLOR_BLACK);
+#ifdef DEBUG
+        std::cout << "Simple solving dead-end:" << std::endl;
+        std::cout << B_dev;
+#endif
 
-        solved = nghyp_solve_loop(H_b.Ls, H_b.B);
+        while (!B_dev->dirty) {
+            nghyp_heuristic_max(X);
 
-        HypotheticalBoard H_w = nghyp_init(Ls_dev, B_dev);
-        nghyp_heuristic_update(&H_w, X, NGCOLOR_BLACK);
+            HypotheticalBoard H_b = nghyp_init(Ls_dev, B_dev);
+            nghyp_heuristic_update(&H_b, X, NGCOLOR_BLACK);
 
-        solved = nghyp_solve_loop(H_b.Ls, H_b.B);
+            solved = nghyp_solve_loop(H_b.Ls, H_b.B);
 
-        // Check for duplicate
+#ifdef DEBUG
+            std::cout << "Hypothesis on black (" << H_b.row << ", " << H_b.col << ")" << std::endl;
+            std::cout << "Sovled: " << solved << "\tValid: " << H_b.B->valid << std::endl;
+            std::cout << H_b.B;
+#endif
+
+            if (solved) {
+                // Copy to actual board
+                nghyp_hyp_confirm(H_b, B_dev, &Ls_dev);
+                nghyp_free(H_b);
+                break;
+            } else {
+                // Check for contradiction
+                if (!nghyp_valid_check(&H_b, B_dev)) {
+                    nghyp_free(H_b);
+                    break;
+                }
+            }
+
+            HypotheticalBoard H_w = nghyp_init(Ls_dev, B_dev);
+            nghyp_heuristic_update(&H_w, X, NGCOLOR_WHITE);
+
+            solved = nghyp_solve_loop(H_w.Ls, H_w.B);
+
+#ifdef DEBUG
+            std::cout << "Hypothesis on white (" << H_w.row << ", " << H_w.col << ")" << std::endl;
+            std::cout << "Sovled: " << solved << "\tValid: " << H_w.B->valid << std::endl;
+            std::cout << H_w.B;
+#endif
+
+            if (solved) {
+                // Copy to actual board
+                nghyp_hyp_confirm(H_w, B_dev, &Ls_dev);
+                nghyp_free(H_b);
+                nghyp_free(H_w);
+                break;
+            } else {
+                // Check for contradiction
+                if (!nghyp_valid_check(&H_w, B_dev)) {
+                    nghyp_free(H_b);
+                    nghyp_free(H_w);
+                    break;
+                }
+            }
+            nghyp_common_set(&H_b, &H_w, B_dev);
+            nghyp_free(H_b);
+            nghyp_free(H_w);
+
+        }
+
+        nghyp_heuristic_free(X);
+
+        // Check for duplicates if not solved
 
     }
 

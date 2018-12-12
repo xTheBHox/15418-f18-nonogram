@@ -17,6 +17,7 @@ Board2DDevice *board2d_init_host(unsigned w, unsigned h) {
     B->w = w;
     B->h = h;
     B->dirty = true;
+    B->valid = true;
 
     // Allocate the board data array
 
