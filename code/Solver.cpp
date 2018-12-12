@@ -144,8 +144,8 @@ bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
             if (L->solved) continue;
             for (unsigned ri = 0; ri < L->constr_len; ri++) {
                 nglinehyp_dev_run_solve(L, B, ri);
+                if (!B->valid) return false;
             }
-            if (!B->valid) return false;
         }
 
         for (unsigned i = 0; i < B->h + B->w; i++) {

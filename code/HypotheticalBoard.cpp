@@ -29,6 +29,74 @@ void nglinehyp_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
 
 }
 
+
+__device__ __inline__
+bool nglinehyp_dev_run_top_adjust(NonogramLineDevice *L, Board2DDevice *B,
+                                  unsigned &topEnd, unsigned line_len, unsigned run_len) {
+
+    if (topEnd < line_len && L->data[topEnd] == NGCOLOR_BLACK) {
+        topEnd++;
+        return true;
+    }
+
+    for (unsigned i = topEnd; i > topEnd - run_len; i--) {
+        if (L->data[i - 1] == NGCOLOR_WHITE) {
+            if (i + run_len > line_len) {
+                B->valid = false;
+                return false;
+            }
+            topEnd = i + run_len;
+            return true;
+        }
+    }
+
+    if (topEnd > run_len && L->data[topEnd - run_len - 1] == NGCOLOR_BLACK) {
+        if (topEnd == line_len) {
+            B->valid = false;
+            return false;
+        }
+        topEnd++;
+        return true;
+    }
+
+    return false;
+
+}
+
+__device__ __inline__
+bool nglinehyp_dev_run_bot_adjust(NonogramLineDevice *L, Board2DDevice *B,
+                                  unsigned &botStart, unsigned line_len, unsigned run_len) {
+
+    if (botStart > 0 && L->data[botStart - 1] == NGCOLOR_BLACK) {
+        botStart--;
+        return true;
+    }
+
+    for (unsigned i = botStart; i < botStart + run_len; i++) {
+        if (L->data[i] == NGCOLOR_WHITE) {
+            if (i < run_len) {
+                B->valid = false;
+                return false;
+            }
+            botStart = i - run_len;
+            return true;
+        }
+    }
+
+    if (botStart + run_len < line_len && L->data[botStart + run_len] == NGCOLOR_BLACK) {
+        if (botStart == 0) {
+            B->valid = false;
+            return false;
+        }
+        botStart--;
+        return true;
+    }
+
+    return false;
+
+}
+
+
 __device__ __inline__
 void nglinehyp_dev_run_fill_black(NonogramLineDevice *L, Board2DDevice *B, const BRun *R, unsigned run_len) {
 
@@ -83,8 +151,12 @@ void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned r
 
     // Adjust the possible start and end points of the runs
 
-    while(ngline_dev_run_top_adjust(L, R->topEnd, line_len, run_len));
-    while(ngline_dev_run_bot_adjust(L, R->botStart, line_len, run_len));
+    while(nglinehyp_dev_run_top_adjust(L, B, R->topEnd, line_len, run_len)) {
+        if (!B->valid) return;
+    }
+    while(nglinehyp_dev_run_bot_adjust(L, B, R->botStart, line_len, run_len)) {
+        if (!B->valid) return;
+    }
 
     // Propagate changes - one thread only!
 
