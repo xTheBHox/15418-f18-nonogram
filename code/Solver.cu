@@ -6,42 +6,11 @@
 
 // #define DEBUG
 
-#ifdef __NVCC__
-__global__
-void ngline_row_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls) {
-    unsigned i = blockIdx.x;
-#else
-void ngline_row_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned i) {
-#endif
-
-    NonogramLineDevice *L = &Ls[i];
-    for (unsigned ri = 0; ri < L->constr_len; ri++) {
-        ngline_dev_run_solve(L, B, ri);
-    }
-    ngline_dev_block_solve(L, B);
-
-}
-
-#ifdef __NVCC__
-__global__
-void ngline_col_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls) {
-    unsigned i = blockIdx.x;
-#else
-void ngline_col_solve_kernel(Board2DDevice *B, NonogramLineDevice *Ls, unsigned i) {
-#endif
-
-    NonogramLineDevice *L = &Ls[B->h + i];
-    for (unsigned ri = 0; ri < L->constr_len; ri++) {
-        ngline_dev_run_solve(L, B, ri);
-    }
-    ngline_dev_block_solve(L, B);
-
-}
 
 #ifdef __NVCC__
 __global__
 void ngline_init_kernel(Board2DDevice *B, NonogramLineDevice *Ls) {
-    unsigned i = blockIdx.x;
+    unsigned i = threadIdx.x;
 
     NonogramLineDevice *L = &Ls[i];
 
@@ -115,49 +84,78 @@ bool ng_constr_add(NonogramLineDevice *Ls, unsigned line_index, unsigned constr)
 #ifdef __NVCC__
 __global__ void
 ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
-        unsigned Ls_size, unsigned B_data_size) {
+        unsigned Ls_size, const unsigned B_data_size, const bool Ls_shared) {
 
     unsigned i = threadIdx.x;
     // BEGIN Shared memory copy. Need all of Ls and B in shared memory.
     // Get pointers
     extern __shared__ int _smem[];
     char *smem = (char *) _smem;
-    NonogramLineDevice *Ls = (NonogramLineDevice *)smem;
-    Board2DDevice *B = (Board2DDevice *)(smem + Ls_size + B_data_size);
+    Board2DDevice *B = (Board2DDevice *)smem;
+    NonogramLineDevice *Ls;
+
+    if (Ls_shared) {
+        Ls = (NonogramLineDevice *)(smem + sizeof(Board2DDevice));
+    }
+    else {
+        Ls_size = 0;
+        Ls = Ls_global;
+    }
 
     if (i == 0) {
-        *B = *B_global;
-        B->data = (NonogramColor *)(smem + Ls_size);
-        B->dataCM =(NonogramColor *)(smem + Ls_size + B_data_size / 2);
+        board2d_dev_init_copy(B, B_global);
+        B->data = (NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size);
+        B->dataCM =(NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size + B_data_size / 2);
         // WARNING DO NOT reference B->solved before updated by all threads!!!
         B->solved = true;
     }
 
-    // Copy Ls;
+
     NonogramLineDevice *L_global = &Ls_global[i];
     NonogramLineDevice *L = &Ls[i];
-    *L = *L_global;
+    if (Ls_shared) {
+        // Copy Ls;
+        *L = *L_global;
+    }
 
     // Need to make sure master finished copying B and the B pointers
     __syncthreads();
 
-    // Update the Ls data pointers
-    if (L->line_is_row) {
-        L->data = board2d_dev_row_ptr_get(B, L->line_index);
+    NonogramColor *L_data_global;
+    if (Ls_shared) {
+        // Update the Ls data pointers
+        if (L->line_is_row) {
+            L->data = board2d_dev_row_ptr_get(B, L->line_index);
+        }
+        else {
+            L->data = board2d_dev_col_ptr_get(B, L->line_index);
+        }
+
+        // Copy respective board row/col. WARNING DOES NOT RESPECT INTERFACE!!!
+        for (unsigned j = 0; j < L->len; j++) {
+            L->data[j] = L_global->data[j];
+        }
     }
     else {
-        L->data = board2d_dev_col_ptr_get(B, L->line_index);
-    }
+        // Update the Ls data pointers
+        L_data_global = L->data;
+        if (L->line_is_row) {
+            L->data = board2d_dev_row_ptr_get(B, L->line_index);
+        }
+        else {
+            L->data = board2d_dev_col_ptr_get(B, L->line_index);
+        }
 
-    // Copy respective board row/col. WARNING DOES NOT RESPECT INTERFACE!!!
-    for (unsigned j = 0; j < L->len; j++) {
-        L->data[j] = Ls_global[i].data[j];
+        for (unsigned j = 0; j < L->len; j++) {
+            L->data[j] = L_data_global[j];
+        }
     }
 
     __syncthreads();
     // END Shared memory copy.
-
     do {
+
+        B->dirty = false;
     /*
     // Because of the nature of a solvable Nonogram, it is possible to
     // simultaneously do the rows and columns because they will only ever
@@ -197,14 +195,21 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
     // Now B->solved is valid
 
     // BEGIN Global memory copy-back
-
-    ngline_dev_mutableonly_copy(L_global, L);
-    for (unsigned j = 0; j < L->len; j++) {
-        L->data[j] = Ls_global[i].data[j];
+    if (Ls_shared) {
+        ngline_dev_mutableonly_copy(L_global, L);
+        for (unsigned j = 0; j < L->len; j++) {
+            L_global->data[j] = L->data[j];
+        }
+    }
+    else {
+        for (unsigned j = 0; j < L->len; j++) {
+            L_data_global[j] = L->data[j];
+        }
+        L->data = L_data_global;
     }
 
     if (i == 0) {
-        board2board2d_dev_mutableonly_copy(B_global, B);
+        board2d_dev_mutableonly_copy(B_global, B);
     }
 
     // END Global memory copy-back
@@ -245,6 +250,9 @@ bool ng_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 }
 #endif
 
+#ifdef __NVCC__
+
+#else
 bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 
     do {
@@ -277,6 +285,7 @@ bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
     return true;
 
 }
+#endif
 
 #ifdef __NVCC__
 void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
@@ -288,6 +297,12 @@ void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
     unsigned B_data_size = 2 * B_host->w * B_host->h * sizeof(NonogramColor);
     unsigned Ls_size = thread_cnt * sizeof(NonogramLineDevice);
     unsigned smem_size = Ls_size + B_data_size + sizeof(Board2DDevice);
+    bool Ls_shared = true;
+
+    if (smem_size > 48 * 1024) {
+        smem_size = B_data_size + sizeof(Board2DDevice);
+        Ls_shared = false;
+    }
 
     NonogramLineDevice *Ls_dev;
     Board2DDevice *B_dev;
@@ -295,6 +310,9 @@ void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
     // Move structures to device memory
 
 #ifdef DEBUG
+    std::cout << "B_data_size: " << B_data_size << std::endl;
+    std::cout << "Ls_size: " << Ls_size << std::endl;
+    std::cout << "smem_size: " << smem_size << std::endl;
     std::cout << "Line array initializing..." << std::endl;
 #endif
     Ls_dev = ng_linearr_init_dev(B_host->w, B_host->h, Ls_host);
@@ -317,13 +335,20 @@ void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
     std::cout << "Lines alternating..." << std::endl;
 #endif
 
-    do {
+    // do {
         //cudaMemcpy(&B_dev->dirty, &B_host->dirty, sizeof(bool), cudaMemcpyHostToDevice);
-        ng_solve_loop_kernel<<<1, thread_cnt, smem_size>>>(Ls_dev, B_dev, Ls_data_size, B_data_size);
+        ng_solve_loop_kernel<<<1, thread_cnt, smem_size>>>(Ls_dev, B_dev, Ls_size, B_data_size, Ls_shared);
+        cudaCheckError(cudaGetLastError());
+        cudaDeviceSynchronize();
+        cudaCheckError(cudaGetLastError());
         //cudaMemcpy(&B_host->dirty, &B_dev->dirty, sizeof(bool), cudaMemcpyDeviceToHost);
-    } while (B_host->dirty);
+    // } while ();
 
     TIMER_STOP(solve_loop);
+
+#ifdef DEBUG
+    std::cout << "Cleaning up device..." << std::endl;
+#endif
 
     board2d_cleanup_dev(B_host, B_dev);
     ng_linearr_free_dev(Ls_dev);

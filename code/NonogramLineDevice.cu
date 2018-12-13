@@ -6,16 +6,6 @@
 
 // #define DEBUG
 
-__device__ __inline__
-unsigned dev_max(unsigned a, unsigned b) {
-    return a > b ? a : b;
-}
-
-__device__ __inline__
-unsigned dev_min(unsigned a, unsigned b) {
-    return a < b ? a : b;
-}
-
 __device__
 void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
                            NonogramColor color, unsigned i) {

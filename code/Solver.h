@@ -5,6 +5,8 @@
 #ifndef CODE_SOLVER_H
 #define CODE_SOLVER_H
 
+#include "Defs.h"
+
 #include "Board2DDevice.h"
 #include "NonogramLineDevice.h"
 #include "HypotheticalBoard.h"

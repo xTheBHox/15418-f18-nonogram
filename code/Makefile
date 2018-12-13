@@ -1,6 +1,6 @@
 CXX_FILES=main.cpp
-CU_FILES=Board2DDevice.cpp NonogramLineDevice.cpp HypotheticalBoard.cpp Solver.cpp
-OBJ_FILES=main.o Board2DDevice.o NonogramLineDevice.o HypotheticalBoard.o Solver.o
+CU_FILES=Board2DDevice.cu NonogramLineDevice.cu HypotheticalBoard.cu Solver.cu
+OBJ_FILES=main.o Board2DDevice.o NonogramLineDevice.o Solver.o
 EXEC=$(EXECPAR)
 EXECPAR=ngram-par
 EXECSEQ=ngram-seq
@@ -14,7 +14,7 @@ LDFLAGS=-L /usr/local/depot/cuda-8.0/lib64/ -l cudart
 SEQDIR=objseq
 PARDIR=objpar
 
-OBJSEQ=$(addprefix $(SEQDIR)/, $(OBJ_FILES))
+OBJSEQ=$(addprefix $(SEQDIR)/, $(OBJ_FILES) HypotheticalBoard.o)
 OBJPAR=$(addprefix $(PARDIR)/, $(OBJ_FILES)) 
 #OBJ=$(OBJDIR)/main.o $(OBJDIR)/Board2DDevice.o $(OBJDIR)/NonogramLineDevice.o
 
@@ -22,21 +22,23 @@ OBJPAR=$(addprefix $(PARDIR)/, $(OBJ_FILES))
 
 default: clean $(EXECPAR) 
 
-seq: clean $(EXECSEQ)
+seq: clean-seq $(EXECSEQ)
 
 debug: CXXFLAGS += $(DBGFLAGS)
 debug: NVCCFLAGS += $(NVCCDBGFLAGS)
 debug: clean $(EXECPAR)
 
 debug-seq: CXXFLAGS += $(DBGFLAGS)
-debug-seq: clean $(EXECSEQ)
+debug-seq: clean-seq $(EXECSEQ)
 
 dirs:
 		mkdir -p $(SEQDIR)/
 		mkdir -p $(PARDIR)/
 
+clean-seq:
+		rm -rf $(SEQDIR) *~ $(EXECSEQ)
 clean:
-		rm -rf $(SEQDIR) $(PARDIR) *~ $(EXECSEQ) $(EXECPAR)
+		rm -rf $(PARDIR) *~ $(EXECPAR)
  
 $(EXECSEQ): dirs $(OBJSEQ)
 	$(CXX) -o $@ $(CXXFLAGS) $(OBJSEQ)

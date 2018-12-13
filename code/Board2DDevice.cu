@@ -46,6 +46,7 @@ Board2DDevice *board2d_init_dev(Board2DDevice *B_host) {
 
     *B_tmp = *B_host;
     cudaCheckError(cudaMalloc((void **)&(B_tmp->data), 2 * B_arr_size));
+
     cudaCheckError(cudaMemcpy((void *)B_tmp->data, (void *)B_host->data, 2 * B_arr_size, cudaMemcpyHostToDevice));
     B_tmp->dataCM = &B_tmp->data[B_host->w * B_host->h];
 
@@ -69,14 +70,15 @@ void board2d_free_host(Board2DDevice *B) {
 void board2d_cleanup_dev(Board2DDevice *B_host, Board2DDevice *B_dev) {
 
 #ifdef __NVCC__
-    void *B_dev_data_val;
-    void *B_dev_data = &B_dev_data_val;
-    cudaCheckError(cudaMemcpy(B_dev_data, (void *)&(B_dev->data), sizeof(void *), cudaMemcpyDeviceToHost));
+    Board2DDevice B_tmp_var;
+    Board2DDevice *B_tmp = &B_tmp_var;
+
+    cudaCheckError(cudaMemcpy((void *)B_tmp, (void *)B_dev, sizeof(Board2DDevice), cudaMemcpyDeviceToHost));
 
     size_t B_arr_size = sizeof(NonogramColor) * B_host->w * B_host->h;
-    cudaCheckError(cudaMemcpy((void *)B_host->data, B_dev_data_val, B_arr_size, cudaMemcpyDeviceToHost));
+    cudaCheckError(cudaMemcpy((void *)B_host->data, (void *)B_tmp->data, B_arr_size, cudaMemcpyDeviceToHost));
 
-    cudaCheckError(cudaFree(B_dev_data_val));
+    cudaCheckError(cudaFree((void *)B_tmp->data));
     cudaCheckError(cudaFree((void *)B_dev));
 #else
     return;
@@ -122,31 +124,14 @@ std::ostream &operator<<(std::ostream &os, Board2DDevice *B) {
 
 }
 
+
 __device__
-void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColor val) {
-    B->data[y * B->w + x] = val;
-    B->dataCM[x * B->h + y] = val;
-    B->dirty = true;
-}
-
-__host__ __device__
-NonogramColor board2d_dev_elem_get_rm(const Board2DDevice *B, unsigned x, unsigned y) {
-    return B->data[y * B->w + x];
-}
-
-__host__ __device__
-NonogramColor board2d_dev_elem_get_cm(const Board2DDevice *B, unsigned x, unsigned y) {
-    return B->dataCM[x * B->h + y];
-}
-
-__host__ __device__
-NonogramColor *board2d_dev_row_ptr_get(const Board2DDevice *B, unsigned index) {
-    return &B->data[index * B->w];
-}
-
-__host__ __device__
-NonogramColor *board2d_dev_col_ptr_get(const Board2DDevice *B, unsigned index) {
-    return &B->dataCM[index * B->h];
+void board2d_dev_init_copy(Board2DDevice *B_dst, const Board2DDevice *B_src) {
+    B_dst->w = B_src->w;
+    B_dst->h = B_src->h;
+    B_dst->dirty = B_src->dirty;
+    B_dst->solved = B_src->solved;
+    B_dst->valid = B_src->valid;
 }
 
 __device__

@@ -24,7 +24,7 @@ typedef struct {
     unsigned len;
     bool line_is_row;
     unsigned line_index;
-    const NonogramColor *data;
+    NonogramColor *data;
     bool solved;
     unsigned constr_len;
     unsigned constr[MAX_RUNS];
@@ -33,29 +33,20 @@ typedef struct {
 } NonogramLineDevice;
 
 __device__ __inline__
-unsigned dev_max(unsigned a, unsigned b);
+unsigned dev_max(unsigned a, unsigned b) {
+    return a > b ? a : b;
+}
+
 __device__ __inline__
-unsigned dev_min(unsigned a, unsigned b);
+unsigned dev_min(unsigned a, unsigned b) {
+    return a < b ? a : b;
+}
 
 __device__
 void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
                            NonogramColor color, unsigned i);
 __device__
 void ngline_init_dev(NonogramLineDevice *L);
-__device__ __inline__
-bool ngline_dev_run_top_adjust(NonogramLineDevice *L,
-                               unsigned &topEnd, unsigned line_len, unsigned run_len);
-__device__ __inline__
-bool ngline_dev_run_bot_adjust(NonogramLineDevice *L,
-                               unsigned &botStart, unsigned line_len, unsigned run_len);
-__device__ __inline__
-void ngline_dev_run_top_prop(NonogramLineDevice *L);
-__device__ __inline__
-void ngline_dev_run_bot_prop(NonogramLineDevice *L);
-__device__ __inline__
-void ngline_dev_run_fill_black(NonogramLineDevice *L, Board2DDevice *B, const BRun *R, unsigned run_len);
-__device__ __inline__
-void ngline_dev_run_fill_white(NonogramLineDevice *L, Board2DDevice *B, unsigned ri);
 
 __device__
 void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned run_index);

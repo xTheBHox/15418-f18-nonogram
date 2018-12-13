@@ -14,29 +14,50 @@
 
 #include "NonogramColor.h"
 
-typedef struct {
+typedef struct alignas(8) {
 
+    NonogramColor *data;
+    NonogramColor *dataCM;
     unsigned w;
     unsigned h;
     bool dirty;
-    NonogramColor *data;
-    NonogramColor *dataCM;
     bool valid;
     bool solved;
 
 } Board2DDevice;
 
-__device__  __inline__
-void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColor val);
-__host__ __device__  __inline__
-NonogramColor board2d_dev_elem_get_rm(const Board2DDevice *B, unsigned x, unsigned y);
-__host__ __device__  __inline__
-NonogramColor board2d_dev_elem_get_cm(const Board2DDevice *B, unsigned x, unsigned y);
-__host__ __device__  __inline__
-NonogramColor *board2d_dev_row_ptr_get(const Board2DDevice *B, unsigned index);
-__host__ __device__  __inline__
-NonogramColor *board2d_dev_col_ptr_get(const Board2DDevice *B, unsigned index);
-__device__ void board2d_dev_mutableonly_copy(Board2DDevice *B_dst, const Board2DDevice *B_src);
+
+__device__ __inline__
+void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColor val) {
+    B->data[y * B->w + x] = val;
+    B->dataCM[x * B->h + y] = val;
+    B->dirty = true;
+}
+
+__host__ __device__ __inline__
+NonogramColor board2d_dev_elem_get_rm(const Board2DDevice *B, unsigned x, unsigned y) {
+    return B->data[y * B->w + x];
+}
+
+__host__ __device__ __inline__
+NonogramColor board2d_dev_elem_get_cm(const Board2DDevice *B, unsigned x, unsigned y) {
+    return B->dataCM[x * B->h + y];
+}
+
+__host__ __device__ __inline__
+NonogramColor *board2d_dev_row_ptr_get(const Board2DDevice *B, unsigned index) {
+    return &B->data[index * B->w];
+}
+
+__host__ __device__ __inline__
+NonogramColor *board2d_dev_col_ptr_get(const Board2DDevice *B, unsigned index) {
+    return &B->dataCM[index * B->h];
+}
+
+__device__
+void board2d_dev_init_copy(Board2DDevice *B_dst, const Board2DDevice *B_src);
+__device__
+void board2d_dev_mutableonly_copy(Board2DDevice *B_dst, const Board2DDevice *B_src);
 
 Board2DDevice *board2d_init_host(unsigned w, unsigned h);
 Board2DDevice *board2d_init_dev(Board2DDevice *B_host);
