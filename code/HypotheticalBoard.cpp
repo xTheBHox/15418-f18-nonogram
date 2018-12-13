@@ -96,6 +96,23 @@ bool nglinehyp_dev_run_bot_adjust(NonogramLineDevice *L, Board2DDevice *B,
 
 }
 
+__device__ __inline__
+void nglinehyp_dev_run_top_prop(NonogramLineDevice *L) {
+
+    for (unsigned ri = 1; ri < L->constr_len; ri++) {
+        L->b_runs[ri].topEnd = std::max(L->b_runs[ri].topEnd, L->b_runs[ri-1].topEnd + L->constr[ri] + 1);
+    }
+
+}
+
+__device__ __inline__
+void nglinehyp_dev_run_bot_prop(NonogramLineDevice *L) {
+
+    for (unsigned ri = L->constr_len - 2; ri < L->constr_len; ri--) {
+        L->b_runs[ri].botStart = std::min(L->b_runs[ri].botStart, L->b_runs[ri+1].botStart - L->constr[ri] - 1);
+    }
+
+}
 
 __device__ __inline__
 void nglinehyp_dev_run_fill_black(NonogramLineDevice *L, Board2DDevice *B, const BRun *R, unsigned run_len) {
@@ -160,8 +177,8 @@ void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned r
 
     // Propagate changes - one thread only!
 
-    ngline_dev_run_top_prop(L);
-    ngline_dev_run_bot_prop(L);
+    nglinehyp_dev_run_top_prop(L);
+    nglinehyp_dev_run_bot_prop(L);
 
     // Fill overlaps
 
@@ -351,8 +368,8 @@ void nghyp_heuristic_cell(const NonogramLineDevice *Ls, const Board2DDevice *B, 
     if (r > 0) color_u = board2d_dev_elem_get_rm(B, c, r - 1);
     if (r < X->h - 1) color_d = board2d_dev_elem_get_rm(B, c, r + 1);
 
-    if (color_l == NGCOLOR_WHITE && color_r == NGCOLOR_UNKNOWN ||
-            color_l == NGCOLOR_UNKNOWN && color_r == NGCOLOR_WHITE) {
+    if ((color_l == NGCOLOR_WHITE && color_r == NGCOLOR_UNKNOWN) ||
+            (color_l == NGCOLOR_UNKNOWN && color_r == NGCOLOR_WHITE)) {
 
         const NonogramLineDevice *L_r = &Ls[r];
         unsigned ri = 0;
@@ -372,8 +389,8 @@ void nghyp_heuristic_cell(const NonogramLineDevice *Ls, const Board2DDevice *B, 
 
     }
 
-    if (color_u == NGCOLOR_WHITE && color_d == NGCOLOR_UNKNOWN ||
-        color_u == NGCOLOR_UNKNOWN && color_d == NGCOLOR_WHITE) {
+    if ((color_u == NGCOLOR_WHITE && color_d == NGCOLOR_UNKNOWN) ||
+        (color_u == NGCOLOR_UNKNOWN && color_d == NGCOLOR_WHITE)) {
 
         const NonogramLineDevice *L_c = &Ls[X->h + c];
         unsigned ri = 0;

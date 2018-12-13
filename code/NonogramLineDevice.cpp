@@ -126,7 +126,6 @@ void ngline_dev_run_bot_prop(NonogramLineDevice *L) {
 
 }
 
-
 __device__ __inline__
 void ngline_dev_run_fill_black(NonogramLineDevice *L, Board2DDevice *B, const BRun *R, unsigned run_len) {
 

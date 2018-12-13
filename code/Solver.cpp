@@ -166,7 +166,7 @@ bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 
 }
 
-Board2DDevice *ng_solve_seq(NonogramLineDevice **pLs_dev, Board2DDevice **pB_dev) {
+void ng_solve_seq(NonogramLineDevice **pLs_dev, Board2DDevice **pB_dev) {
 
     NonogramLineDevice *Ls_dev = *pLs_dev;
     Board2DDevice *B_dev = *pB_dev;

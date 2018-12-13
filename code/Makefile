@@ -1,12 +1,11 @@
-
 CXX_FILES=main.cpp
-CU_FILES=Board2DDevice.cu NonogramLineDevice.cu
-OBJ_FILES=main.o Board2DDevice.o NonogramLineDevice.o
+CU_FILES=Board2DDevice.cpp NonogramLineDevice.cpp HypotheticalBoard.cpp Solver.cpp
+OBJ_FILES=main.o Board2DDevice.o NonogramLineDevice.o HypotheticalBoard.o Solver.o
 EXEC=$(EXECPAR)
 EXECPAR=ngram-par
 EXECSEQ=ngram-seq
 CXX=g++ -m64
-CXXFLAGS=-Wall -O3
+CXXFLAGS=-Wall -O3 -std=c++11
 DBGFLAGS= -D DEBUG -D PERF -g
 NVCC=nvcc -m64
 NVCCFLAGS=-O3 --gpu-architecture compute_61 --gpu-code sm_61
