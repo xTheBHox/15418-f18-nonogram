@@ -5,10 +5,10 @@ EXEC=$(EXECPAR)
 EXECPAR=ngram-par
 EXECSEQ=ngram-seq
 CXX=g++ -m64
-CXXFLAGS=-Wall -O3 -std=c++11
-DBGFLAGS= -D DEBUG -D PERF -g
+CXXFLAGS=-Wall -O3 -std=c++11 -D PERF
+DBGFLAGS= -D DEBUG  -g
 NVCC=nvcc -m64
-NVCCFLAGS=-O3 --gpu-architecture compute_61 --gpu-code sm_61
+NVCCFLAGS=-O3 -std=c++11 -D PERF --gpu-architecture compute_61 --gpu-code sm_61
 NVCCDBGFLAGS=$(DBGFLAGS) -G
 LDFLAGS=-L /usr/local/depot/cuda-8.0/lib64/ -l cudart
 SEQDIR=objseq

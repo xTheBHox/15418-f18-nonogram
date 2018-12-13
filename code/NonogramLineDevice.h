@@ -32,7 +32,10 @@ typedef struct {
 
 } NonogramLineDevice;
 
-
+__device__ __inline__
+unsigned dev_max(unsigned a, unsigned b);
+__device__ __inline__
+unsigned dev_min(unsigned a, unsigned b);
 
 __device__
 void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
@@ -58,6 +61,8 @@ __device__
 void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned run_index);
 __device__
 void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B);
+__device__
+void ngline_dev_mutableonly_copy(NonogramLineDevice *L_dst, const NonogramLineDevice *L_src);
 
 bool ng_linearr_init_host(unsigned w, unsigned h, NonogramLineDevice **Ls);
 NonogramLineDevice *ng_linearr_init_dev(unsigned w, unsigned h, NonogramLineDevice *Ls_host);

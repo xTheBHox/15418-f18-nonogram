@@ -18,6 +18,7 @@ Board2DDevice *board2d_init_host(unsigned w, unsigned h) {
     B->h = h;
     B->dirty = true;
     B->valid = true;
+    B->solved = false;
 
     // Allocate the board data array
 
@@ -87,6 +88,9 @@ Board2DDevice *board2d_deepcopy_host(Board2DDevice *B) {
 
     Board2DDevice *B_copy = board2d_init_host(B->w, B->h);
     memcpy((void *)B_copy->data, (void *)B->data, 2 * B->w * B->h * sizeof(NonogramColor));
+    B_copy->solved = B->solved;
+    B_copy->valid = B->valid;
+    B_copy->dirty = true;
     return B_copy;
 
 }
@@ -130,17 +134,24 @@ NonogramColor board2d_dev_elem_get_rm(const Board2DDevice *B, unsigned x, unsign
     return B->data[y * B->w + x];
 }
 
-__device__
+__host__ __device__
 NonogramColor board2d_dev_elem_get_cm(const Board2DDevice *B, unsigned x, unsigned y) {
     return B->dataCM[x * B->h + y];
 }
 
-__device__
+__host__ __device__
 NonogramColor *board2d_dev_row_ptr_get(const Board2DDevice *B, unsigned index) {
     return &B->data[index * B->w];
 }
 
-__device__
+__host__ __device__
 NonogramColor *board2d_dev_col_ptr_get(const Board2DDevice *B, unsigned index) {
     return &B->dataCM[index * B->h];
+}
+
+__device__
+void board2d_dev_mutableonly_copy(Board2DDevice *B_dst, const Board2DDevice *B_src) {
+    B_dst->dirty = B_src->dirty;
+    B_dst->solved = B_src->solved;
+    B_dst->valid = B_src->valid;
 }

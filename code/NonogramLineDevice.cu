@@ -6,6 +6,16 @@
 
 // #define DEBUG
 
+__device__ __inline__
+unsigned dev_max(unsigned a, unsigned b) {
+    return a > b ? a : b;
+}
+
+__device__ __inline__
+unsigned dev_min(unsigned a, unsigned b) {
+    return a < b ? a : b;
+}
+
 __device__
 void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
                            NonogramColor color, unsigned i) {
@@ -112,7 +122,7 @@ __device__ __inline__
 void ngline_dev_run_top_prop(NonogramLineDevice *L) {
 
     for (unsigned ri = 1; ri < L->constr_len; ri++) {
-        L->b_runs[ri].topEnd = std::max(L->b_runs[ri].topEnd, L->b_runs[ri-1].topEnd + L->constr[ri] + 1);
+        L->b_runs[ri].topEnd = dev_max(L->b_runs[ri].topEnd, L->b_runs[ri-1].topEnd + L->constr[ri] + 1);
     }
 
 }
@@ -121,7 +131,7 @@ __device__ __inline__
 void ngline_dev_run_bot_prop(NonogramLineDevice *L) {
 
     for (unsigned ri = L->constr_len - 2; ri < L->constr_len; ri--) {
-        L->b_runs[ri].botStart = std::min(L->b_runs[ri].botStart, L->b_runs[ri+1].botStart - L->constr[ri] - 1);
+        L->b_runs[ri].botStart = dev_min(L->b_runs[ri].botStart, L->b_runs[ri+1].botStart - L->constr[ri] - 1);
     }
 
 }
@@ -259,8 +269,8 @@ void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
                     run_len_max = run_len;
                 }
                 else {
-                    run_len_min = std::min(run_len, run_len_min);
-                    run_len_max = std::max(run_len, run_len_max);
+                    run_len_min = dev_min(run_len, run_len_min);
+                    run_len_max = dev_max(run_len, run_len_max);
                 }
                 run_fit_count++;
                 run_fit_index = ri_last;
@@ -296,6 +306,16 @@ void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
     }
 
     if (solved) L->solved = true;
+
+}
+
+__device__
+void ngline_dev_mutableonly_copy(NonogramLineDevice *L_dst, const NonogramLineDevice *L_src) {
+
+    L_dst->solved = L_src->solved;
+    for (unsigned i = 0; i < L_src->constr_len; i++) {
+        L_dst->b_runs[i] = L_src->b_runs[i];
+    }
 
 }
 

@@ -12,7 +12,6 @@
 bool ng_init(unsigned w, unsigned h, NonogramLineDevice **Ls, Board2DDevice **B);
 void ng_free(NonogramLineDevice *Ls, Board2DDevice *B);
 bool ng_constr_add(NonogramLineDevice *Ls, unsigned line_index, unsigned constr);
-void ng_solve(NonogramLineDevice *Ls_host, Board2DDevice *B_host);
-void ng_solve_seq(NonogramLineDevice **Ls_host, Board2DDevice **B_host);
+void ng_solve(NonogramLineDevice **pLs_host, Board2DDevice **pB_host);
 
 #endif //CODE_SOLVER_H

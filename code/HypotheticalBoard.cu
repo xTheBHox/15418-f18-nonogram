@@ -100,7 +100,7 @@ __device__ __inline__
 void nglinehyp_dev_run_top_prop(NonogramLineDevice *L) {
 
     for (unsigned ri = 1; ri < L->constr_len; ri++) {
-        L->b_runs[ri].topEnd = std::max(L->b_runs[ri].topEnd, L->b_runs[ri-1].topEnd + L->constr[ri] + 1);
+        L->b_runs[ri].topEnd = dev_max(L->b_runs[ri].topEnd, L->b_runs[ri-1].topEnd + L->constr[ri] + 1);
     }
 
 }
@@ -109,7 +109,7 @@ __device__ __inline__
 void nglinehyp_dev_run_bot_prop(NonogramLineDevice *L) {
 
     for (unsigned ri = L->constr_len - 2; ri < L->constr_len; ri--) {
-        L->b_runs[ri].botStart = std::min(L->b_runs[ri].botStart, L->b_runs[ri+1].botStart - L->constr[ri] - 1);
+        L->b_runs[ri].botStart = dev_min(L->b_runs[ri].botStart, L->b_runs[ri+1].botStart - L->constr[ri] - 1);
     }
 
 }
@@ -259,8 +259,8 @@ void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
                     run_len_max = run_len;
                 }
                 else {
-                    run_len_min = std::min(run_len, run_len_min);
-                    run_len_max = std::max(run_len, run_len_max);
+                    run_len_min = dev_min(run_len, run_len_min);
+                    run_len_max = dev_max(run_len, run_len_max);
                 }
                 run_fit_count++;
                 run_fit_index = ri_last;
@@ -381,7 +381,7 @@ void nghyp_heuristic_cell(const NonogramLineDevice *Ls, const Board2DDevice *B, 
             unsigned min_run_len = L_r->constr[ri];
             ri++;
             while (ri < L_r->constr_len && L_r->b_runs[ri].topEnd <= c + L_r->constr[ri]) {
-                min_run_len = std::min(min_run_len, L_r->constr[ri]);
+                min_run_len = dev_min(min_run_len, L_r->constr[ri]);
                 ri++;
             }
             score += min_run_len;
@@ -402,7 +402,7 @@ void nghyp_heuristic_cell(const NonogramLineDevice *Ls, const Board2DDevice *B, 
             unsigned min_run_len = L_c->constr[ri];
             ri++;
             while (ri < L_c->constr_len && L_c->b_runs[ri].topEnd <= r + L_c->constr[ri]) {
-                min_run_len = std::min(min_run_len, L_c->constr[ri]);
+                min_run_len = dev_min(min_run_len, L_c->constr[ri]);
                 ri++;
             }
             score += min_run_len;
