@@ -166,7 +166,11 @@ void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned r
     // Fill overlaps
 
     nglinehyp_dev_run_fill_black(L, B, R, run_len);
+
+    // Add the padding to the front of each run
     nglinehyp_dev_run_fill_white(L, B, run_index);
+
+    // Add the padding at the end of the line
     if (run_index == 0) nglinehyp_dev_run_fill_white(L, B, L->constr_len);
 
 }
@@ -455,10 +459,15 @@ void nghyp_free(HypotheticalBoard H) {
 
 }
 
-void nghyp_hyp_confirm(HypotheticalBoard H, Board2DDevice *B, NonogramLineDevice **Ls) {
+void nghyp_hyp_confirm(HypotheticalBoard *H, Board2DDevice **B, NonogramLineDevice **Ls) {
 
-    std::swap(H.B->data, B->data);
-    std::swap(H.Ls, *Ls);
+    Board2DDevice *tmp_B = *B;
+    *B = H->B;
+    H->B = tmp_B;
+
+    NonogramLineDevice *tmp_Ls = *Ls;
+    *Ls = H->Ls;
+    H->Ls = tmp_Ls;
 
 }
 
@@ -493,7 +502,7 @@ void nghyp_common_set(HypotheticalBoard *H1, HypotheticalBoard *H2, Board2DDevic
             if (board2d_dev_elem_get_rm(B, c, r) == NGCOLOR_UNKNOWN) {
                 NonogramColor color = board2d_dev_elem_get_rm(H1->B, c, r);
                 if (color != NGCOLOR_UNKNOWN &&
-                    color == board2d_dev_elem_get_rm(H1->B, c, r)) {
+                    color == board2d_dev_elem_get_rm(H2->B, c, r)) {
                     board2d_dev_elem_set(B, c, r, color);
                     B->dirty = true;
                 }

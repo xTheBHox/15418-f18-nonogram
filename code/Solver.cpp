@@ -3,9 +3,8 @@
 //
 
 #include "Solver.h"
-#include "Board2DDevice.h"
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef __NVCC__
 __global__
@@ -155,8 +154,6 @@ bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
             if (!B->valid) return false;
         }
 
-        std::cout << std::endl << B;
-
     } while (B->dirty);
 
     for (unsigned i = 0; i < B->h; i++) {
@@ -169,13 +166,15 @@ bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 
 }
 
-void ng_solve_seq(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
+Board2DDevice *ng_solve_seq(NonogramLineDevice **pLs_dev, Board2DDevice **pB_dev) {
 
-    NonogramLineDevice *Ls_dev = Ls_host;
-    Board2DDevice *B_dev = B_host;
+    NonogramLineDevice *Ls_dev = *pLs_dev;
+    Board2DDevice *B_dev = *pB_dev;
+
+    TIMER_START(solve_loop);
 
     // Initialize the runs
-    unsigned block_cnt = B_host->w + B_host->h;
+    unsigned block_cnt = B_dev->w + B_dev->h;
     for (unsigned i = 0; i < block_cnt; i++) {
         ngline_init_kernel(B_dev, Ls_dev, i);
     }
@@ -212,7 +211,7 @@ void ng_solve_seq(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
 
             if (solved) {
                 // Copy to actual board
-                nghyp_hyp_confirm(H_b, B_dev, &Ls_dev);
+                nghyp_hyp_confirm(&H_b, &B_dev, &Ls_dev);
                 nghyp_free(H_b);
                 break;
             } else {
@@ -236,7 +235,7 @@ void ng_solve_seq(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
 
             if (solved) {
                 // Copy to actual board
-                nghyp_hyp_confirm(H_w, B_dev, &Ls_dev);
+                nghyp_hyp_confirm(&H_w, &B_dev, &Ls_dev);
                 nghyp_free(H_b);
                 nghyp_free(H_w);
                 break;
@@ -248,20 +247,22 @@ void ng_solve_seq(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
                     break;
                 }
             }
+            // Check for duplicates if not solved
             nghyp_common_set(&H_b, &H_w, B_dev);
             nghyp_free(H_b);
             nghyp_free(H_w);
+
+            // At this point, try a different hypothesis if it didn't gain any new cells
 
         }
 
         nghyp_heuristic_free(X);
 
-        // Check for duplicates if not solved
-
     }
 
-    board2d_cleanup_dev(B_host, B_dev);
-    ng_linearr_free_dev(Ls_dev);
+    TIMER_STOP(solve_loop);
+    *pB_dev = B_dev;
+    *pLs_dev = Ls_dev;
 
 }
 

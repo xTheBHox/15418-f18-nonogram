@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <vector>
 
-// #define PERF
+#define PERF
 // #define DEBUG
 // #define __NVCC__
 
@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
 
     std::cout << "Solving..." << std::endl;
     TIMER_START(ng_solve);
-    ng_solve_seq(Ls, B);
+    ng_solve_seq(&Ls, &B);
     TIMER_STOP(ng_solve);
     std::cout << "Completed." << std::endl;
     std::cout << B;

@@ -4,7 +4,7 @@
 #include "NonogramLineDevice.h"
 #include "Board2DDevice.h"
 
-//#define DEBUG
+// #define DEBUG
 
 __device__
 void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,

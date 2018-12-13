@@ -43,7 +43,7 @@ void nghyp_heuristic_max(Heuristic *X);
 
 HypotheticalBoard nghyp_init(NonogramLineDevice *Ls, Board2DDevice *B);
 void nghyp_free(HypotheticalBoard H);
-void nghyp_hyp_confirm(HypotheticalBoard H, Board2DDevice *B, NonogramLineDevice **Ls);
+void nghyp_hyp_confirm(HypotheticalBoard *H, Board2DDevice **B, NonogramLineDevice **Ls);
 bool nghyp_valid_check(HypotheticalBoard *H, Board2DDevice *B);
 void nghyp_common_set(HypotheticalBoard *H1, HypotheticalBoard *H2, Board2DDevice *B);
 
