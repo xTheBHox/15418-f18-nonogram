@@ -251,6 +251,277 @@ bool ng_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 #endif
 
 #ifdef __NVCC__
+__global__
+void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global, Heuristic *X,
+        unsigned Ls_size, const unsigned B_data_size, const bool Ls_shared,
+        const NonogramLineDevice *Ls_original,
+        unsigned *B_lock, int *B_status) {
+
+    unsigned i = threadIdx.x;
+
+    NonogramColor H_color;
+    if (blockIdx.x == 0) {
+        H_color = NGCOLOR_BLACK;
+    }
+    else {
+        H_color = NGCOLOR_WHITE;
+        if (!Ls_shared) Ls_global = (NonogramLineDevice *)(((char *)Ls_global) + Ls_size);
+    }
+
+    // BEGIN Shared memory copy. Need all of Ls and B in shared memory.
+    // Get pointers
+    extern __shared__ int _smem[];
+    char *smem = (char *) _smem;
+    Board2DDevice *B = (Board2DDevice *)smem;
+    NonogramLineDevice *Ls;
+
+    if (Ls_shared) {
+        Ls = (NonogramLineDevice *)(smem + sizeof(Board2DDevice));
+    }
+    else {
+        Ls_size = 0;
+        Ls = Ls_global;
+    }
+
+    if (i == 0) {
+        board2d_dev_init_copy(B, B_global);
+        B->data = (NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size);
+        B->dataCM =(NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size + B_data_size / 2);
+        // WARNING DO NOT reference B->solved before updated by all threads!!!
+        B->solved = true;
+    }
+
+
+    const NonogramLineDevice *L_global;
+    if (Ls_shared) L_global = &Ls_global[i];
+    else L_global = &Ls_original[i];
+
+    NonogramLineDevice *L = &Ls[i];
+    if (Ls_shared) {
+        // Copy Ls;
+        *L = *L_global;
+    }
+
+    // Need to make sure master finished copying B and the B pointers
+    __syncthreads();
+
+    // Update the Ls data pointers
+    if (L->line_is_row) {
+        L->data = board2d_dev_row_ptr_get(B, L->line_index);
+    }
+    else {
+        L->data = board2d_dev_col_ptr_get(B, L->line_index);
+    }
+
+    // Copy respective board row/col. WARNING DOES NOT RESPECT INTERFACE!!!
+    for (unsigned j = 0; j < L->len; j++) {
+        L->data[j] = L_global->data[j];
+    }
+
+    __syncthreads();
+    // END Shared memory copy.
+
+    // Set up the hypothesis in memory
+    HypotheticalBoard H;
+    H.B = B;
+    H.Ls = Ls;
+    if (i == 0) {
+        nghyp_heuristic_update(&H, X, H_color);
+#ifdef DEBUG
+        fprintf("Hypothesis: %d in (%d, %d)\n", H.guess_color, H.row, H.col);
+#endif
+    }
+    else {
+        H.row = X->r_max;
+        H.col = X->c_max;
+        H.guess_color = H_color;
+    }
+
+    do {
+        B->dirty = false;
+    /*
+    // Because of the nature of a solvable Nonogram, it is possible to
+    // simultaneously do the rows and columns because they will only ever
+    // write correct values.
+    if (!L->solved) {
+        for (unsigned ri = 0; ri < L->constr_len; ri++) {
+            ngline_dev_run_solve(L, B, ri);
+        }
+    }
+    */
+        if (L->line_is_row) { // Solve rows
+            if (!L->solved) {
+                for (unsigned ri = 0; ri < L->constr_len; ri++) {
+                    nglinehyp_dev_run_solve(L, B, ri);
+                }
+            }
+        }
+        __syncthreads();
+        if (!B->valid) {
+            break;
+        }
+
+        if (!L->line_is_row) { // Solve columns
+            if (!L->solved) {
+                for (unsigned ri = 0; ri < L->constr_len; ri++) {
+                    nglinehyp_dev_run_solve(L, B, ri);
+                }
+            }
+        }
+        __syncthreads();
+        if (!B->valid) {
+            break;
+        }
+
+        // TOOD decide whether this is useful
+        if (B->dirty) continue;
+
+        if (!L->solved) ngline_dev_block_solve(L, B);
+
+        __syncthreads();
+        if (!B->valid) {
+            break;
+        }
+
+    } while (B->dirty);
+
+    if (L->line_is_row && !L->solved) B->solved = false;
+    // Now B->solved is valid
+#ifdef DEBUG
+    if (i == 0) {
+        printf("Solved: %d\t Valid: %d\n", B->solved, B->valid);
+    }
+#endif
+
+    if (i == 0) {
+        // Try to take the lock
+        unsigned k;
+        do {
+            k = atomicCAS(B_lock, 0, 1);
+        } while (k == 1);
+    }
+    __syncthreads();
+
+    if (*B_lock == 1) {
+        // This is the first hypothesis to finish
+        if (!B->valid) {
+            if (i == 0) *B_status = -1;
+            return;
+        }
+        else if (B->solved) {
+            // We have solved the board. Don't care about the other hypothesis.
+            // Don't care about the lines.
+            if (i == 0) {
+                *B_status = 1;
+                board2d_dev_mutableonly_copy(B_global, B);
+            }
+            for (unsigned j = 0; j < L->len; j++) {
+                L_global->data[j] = L->data[j];
+            }
+        }
+        else {
+            // Dead end. Put assumptions in the board.
+            if (i == 0) *B_status = 0;
+            for (unsigned j = 0; j < L->len; j++) {
+                nghyp_hyp_assume(L, L_global, B_global, j);
+            }
+        }
+    }
+    else {
+
+#ifdef DEBUG
+        if (i == 0) {
+            if (*B_lock != 2) {
+                printf("Invalid lock value!\n");
+            }
+        }
+#endif
+        if (*B_status == -1) {
+            // The other hypothesis hit a contradiction
+#ifdef DEBUG
+            if (i == 0) {
+                if (!B->valid) printf("Error: Both hypotheses contradict\n");
+            }
+#endif
+            for (unsigned j = 0; j < L->len; j++) {
+                nghyp_confirm_assume(L, L_global, B_global, j);
+            }
+            return;
+        }
+        if (*B_status == 1) {
+            // The other hypothesis solved the board already
+#ifdef DEBUG
+            if (i == 0) {
+                if (B->solved) printf("Error: Both hypotheses solved the board\n");
+            }
+#endif
+            return;
+        }
+#ifdef DEBUG
+        if (i == 0) {
+            if (*B_status != 0) {
+                printf("Invalid status value!\n");
+            }
+        }
+#endif
+        if (!B->valid) {
+            for (unsigned j = 0; j < L->len; j++) {
+                nghyp_confirm_unassume(L_global, B_global, j);
+            }
+            return;
+        }
+        else if (B->solved) {
+            // We have solved the board. Don't care about the other hypothesis.
+            // Don't care about the lines.
+            if (i == 0) {
+                board2d_dev_mutableonly_copy(B_global, B);
+            }
+            for (unsigned j = 0; j < L->len; j++) {
+                L_global->data[j] = L->data[j];
+            }
+            return;
+        }
+        else {
+            // Dead end. Put assumptions in the board.
+            for (unsigned j = 0; j < L->len; j++) {
+                nghyp_hyp_assume(L, L_global, B_global, j);
+            }
+            return;
+        }
+    }
+
+}
+void nghyp_solve_loop_kernel_prep(
+        NonogramLineDevice *Ls_global, Board2DDevice *B_global, Heuristic *X, const unsigned thread_cnt,
+        const unsigned smem_size, const unsigned Ls_size, const unsigned B_data_size,
+        const bool Ls_shared) {
+
+    // Make the locks and the status
+    unsigned *B_lock;
+    cudaCheckError(cudaMalloc((void **)&B_lock, sizeof(unsigned)));
+    cudaCheckError(cudaMemset((void *)B_lock, 0, sizeof(unsigned)));
+    int *B_status;
+    cudaCheckError(cudaMalloc((void **)&B_status, sizeof(int)));
+
+    if (!Ls_shared) {
+        NonogramLineDevice *Ls_copy = ng_linearr_deepcopy_dev_double(Ls_global, Ls_size);
+        nghyp_solve_loop_kernel<<<2, thread_cnt, smem_size>>>(
+            Ls_copy, B_global, X,
+            Ls_size, B_data_size, Ls_shared,
+            Ls_global, B_lock, B_status);
+        cudaCheckError(cudaFree(Ls_copy));
+    }
+    else {
+        nghyp_solve_loop_kernel<<<2, thread_cnt, smem_size>>>(
+            Ls_global, B_global, X,
+            Ls_size, B_data_size, Ls_shared,
+            NULL, B_lock, B_status);
+    }
+
+    cudaCheckError(cudaFree(B_lock));
+    cudaCheckError(cudaFree(B_status));
+
+}
 
 #else
 bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
@@ -335,14 +606,43 @@ void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
     std::cout << "Lines alternating..." << std::endl;
 #endif
 
-    // do {
-        //cudaMemcpy(&B_dev->dirty, &B_host->dirty, sizeof(bool), cudaMemcpyHostToDevice);
+    bool solved = false;
+    bool dirty = true;
+    while (!solved) {
+
         ng_solve_loop_kernel<<<1, thread_cnt, smem_size>>>(Ls_dev, B_dev, Ls_size, B_data_size, Ls_shared);
+#ifdef DEBUG
         cudaCheckError(cudaGetLastError());
         cudaDeviceSynchronize();
         cudaCheckError(cudaGetLastError());
-        //cudaMemcpy(&B_host->dirty, &B_dev->dirty, sizeof(bool), cudaMemcpyDeviceToHost);
-    // } while ();
+#endif
+        // Check if the board is solved
+        cudaCheckError(cudaMemcpy(&solved, &B_dev->solved, sizeof(bool), cudaMemcpyDeviceToHost));
+        if (solved) break;
+
+        Heuristic *X_dev = nghyp_heuristic_init_dev(Ls_dev, B_dev);
+        nghyp_heuristic_fill(Ls_dev, B_dev, X_dev, B_host->w, B_host->h);
+
+#ifdef DEBUG
+        std::cout << "Simple solving dead-end." << std::endl;
+#endif
+
+        while (!dirty) {
+            nghyp_heuristic_max(X_dev);
+
+            nghyp_solve_loop_kernel_prep(Ls_dev, B_dev, X_dev, thread_cnt,
+                    smem_size, Ls_size, B_data_size, Ls_shared);
+            cudaCheckError(cudaMemcpy(&solved, &B_dev->solved, sizeof(bool), cudaMemcpyDeviceToHost));
+            cudaCheckError(cudaMemcpy(&dirty, &B_dev->dirty, sizeof(bool), cudaMemcpyDeviceToHost));
+
+            if (solved) {
+                break;
+            }
+        }
+
+        nghyp_heuristic_free(X_dev);
+
+    }
 
     TIMER_STOP(solve_loop);
 
@@ -377,7 +677,7 @@ void ng_solve_seq(NonogramLineDevice **pLs_dev, Board2DDevice **pB_dev) {
 
         Heuristic *X;
         nghyp_heuristic_init(Ls_dev, B_dev, &X);
-        nghyp_heuristic_fill(Ls_dev, B_dev, X);
+        nghyp_heuristic_fill(Ls_dev, B_dev, X, X->w, X->h);
 
 #ifdef DEBUG
         std::cout << "Simple solving dead-end:" << std::endl;

@@ -1,6 +1,6 @@
 CXX_FILES=main.cpp
 CU_FILES=Board2DDevice.cu NonogramLineDevice.cu HypotheticalBoard.cu Solver.cu
-OBJ_FILES=main.o Board2DDevice.o NonogramLineDevice.o Solver.o
+OBJ_FILES=main.o Board2DDevice.o NonogramLineDevice.o HypotheticalBoard.o Solver.o
 EXEC=$(EXECPAR)
 EXECPAR=ngram-par
 EXECSEQ=ngram-seq
@@ -14,7 +14,7 @@ LDFLAGS=-L /usr/local/depot/cuda-8.0/lib64/ -l cudart
 SEQDIR=objseq
 PARDIR=objpar
 
-OBJSEQ=$(addprefix $(SEQDIR)/, $(OBJ_FILES) HypotheticalBoard.o)
+OBJSEQ=$(addprefix $(SEQDIR)/, $(OBJ_FILES))
 OBJPAR=$(addprefix $(PARDIR)/, $(OBJ_FILES)) 
 #OBJ=$(OBJDIR)/main.o $(OBJDIR)/Board2DDevice.o $(OBJDIR)/NonogramLineDevice.o
 

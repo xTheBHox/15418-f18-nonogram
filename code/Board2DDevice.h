@@ -27,7 +27,7 @@ typedef struct alignas(8) {
 } Board2DDevice;
 
 
-__device__ __inline__
+__host__ __device__ __inline__
 void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColor val) {
     B->data[y * B->w + x] = val;
     B->dataCM[x * B->h + y] = val;

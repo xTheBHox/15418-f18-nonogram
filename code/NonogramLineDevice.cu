@@ -347,7 +347,6 @@ NonogramLineDevice *ng_linearr_init_dev(unsigned w, unsigned h, NonogramLineDevi
 #ifdef DEBUG
     std::cout << __func__ << " called" << std::endl;
 #endif
-#ifdef __NVCC__
     void *Ls_dev;
     size_t Ls_size = sizeof(NonogramLineDevice) * (w + h);
 
@@ -355,19 +354,12 @@ NonogramLineDevice *ng_linearr_init_dev(unsigned w, unsigned h, NonogramLineDevi
     cudaCheckError(cudaMemcpy(Ls_dev, (void *)Ls_host, Ls_size, cudaMemcpyHostToDevice));
 
     return (NonogramLineDevice *)Ls_dev;
-#else
-    return Ls_host;
-#endif
 
 }
 
 void ng_linearr_free_dev(NonogramLineDevice *Ls_dev) {
 
-#ifdef __NVCC__
     cudaCheckError(cudaFree(Ls_dev));
-#else
-    return;
-#endif
 
 }
 
@@ -384,6 +376,18 @@ NonogramLineDevice *ng_linearr_deepcopy_host(NonogramLineDevice *Ls, unsigned w,
 
     memcpy((void *)Ls_copy, (void *)Ls, Ls_size);
     return Ls_copy;
+
+}
+
+NonogramLineDevice *ng_linearr_deepcopy_dev_double(NonogramLineDevice *Ls, unsigned Ls_size) {
+
+    NonogramLineDevice *Ls_dcopy;
+    cudaCheckError(cudaMalloc((void **)&Ls_dcopy, 2 * Ls_size));
+    cudaCheckError(cudaMemcpy((void *)Ls_dcopy, (void *)Ls, Ls_size, cudaMemcpyDeviceToDevice));
+    char *Ls_copy2 = ((char *) Ls_dcopy) + Ls_size;
+    cudaCheckError(cudaMemcpy((void *)Ls_copy2, (void *)Ls, Ls_size, cudaMemcpyDeviceToDevice));
+
+    return Ls_dcopy;
 
 }
 

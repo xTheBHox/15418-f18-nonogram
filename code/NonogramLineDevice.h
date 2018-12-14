@@ -12,7 +12,7 @@
 #include "NonogramColor.h"
 #include "Board2DDevice.h"
 
-#define MAX_RUNS 32
+#define MAX_RUNS 16
 
 typedef struct {
     unsigned topEnd;
@@ -59,6 +59,7 @@ bool ng_linearr_init_host(unsigned w, unsigned h, NonogramLineDevice **Ls);
 NonogramLineDevice *ng_linearr_init_dev(unsigned w, unsigned h, NonogramLineDevice *Ls_host);
 void ng_linearr_free_dev(NonogramLineDevice *Ls_dev);
 NonogramLineDevice *ng_linearr_deepcopy_host(NonogramLineDevice *Ls, unsigned w, unsigned h);
+NonogramLineDevice *ng_linearr_deepcopy_dev_double(NonogramLineDevice *Ls, unsigned Ls_size);
 void ng_linearr_board_change(NonogramLineDevice *Ls, Board2DDevice *B);
 
 #endif //CODE_NONOGRAMLINEDEVICE_H
