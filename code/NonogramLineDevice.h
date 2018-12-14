@@ -15,8 +15,8 @@
 #define MAX_RUNS 16
 
 typedef struct {
-    unsigned topEnd;
-    unsigned botStart;
+    unsigned char topEnd;
+    unsigned char botStart;
 } BRun;
 
 typedef struct {
@@ -27,7 +27,7 @@ typedef struct {
     NonogramColor *data;
     bool solved;
     unsigned constr_len;
-    unsigned constr[MAX_RUNS];
+    unsigned char constr[MAX_RUNS];
     BRun b_runs[MAX_RUNS];
 
 } NonogramLineDevice;

@@ -36,9 +36,9 @@ Board2DDevice *board2d_init_host(unsigned w, unsigned h) {
 
 }
 
+#ifdef __NVCC__
 Board2DDevice *board2d_init_dev(Board2DDevice *B_host) {
 
-#ifdef __NVCC__
     Board2DDevice B_tmp_var;
     Board2DDevice *B_tmp = &B_tmp_var;
     void *B_dev;
@@ -54,11 +54,9 @@ Board2DDevice *board2d_init_dev(Board2DDevice *B_host) {
     cudaCheckError(cudaMemcpy(B_dev, (void *)B_tmp, sizeof(Board2DDevice), cudaMemcpyHostToDevice));
 
     return (Board2DDevice *)B_dev;
-#else
-    return B_host;
-#endif
 
 }
+#endif
 
 void board2d_free_host(Board2DDevice *B) {
 
@@ -67,9 +65,8 @@ void board2d_free_host(Board2DDevice *B) {
 
 }
 
-void board2d_cleanup_dev(Board2DDevice *B_host, Board2DDevice *B_dev) {
-
 #ifdef __NVCC__
+void board2d_cleanup_dev(Board2DDevice *B_host, Board2DDevice *B_dev) {
     Board2DDevice B_tmp_var;
     Board2DDevice *B_tmp = &B_tmp_var;
 
@@ -80,11 +77,9 @@ void board2d_cleanup_dev(Board2DDevice *B_host, Board2DDevice *B_dev) {
 
     cudaCheckError(cudaFree((void *)B_tmp->data));
     cudaCheckError(cudaFree((void *)B_dev));
-#else
-    return;
-#endif
 
 }
+#endif
 
 Board2DDevice *board2d_deepcopy_host(Board2DDevice *B) {
 
@@ -115,6 +110,10 @@ std::ostream &operator<<(std::ostream &os, Board2DDevice *B) {
                     sym = '.';
                     break;
                 }
+                default: {
+                    sym = 'H';
+                    break;
+                }
             }
             os << sym;
         }
@@ -123,7 +122,6 @@ std::ostream &operator<<(std::ostream &os, Board2DDevice *B) {
     return os;
 
 }
-
 
 __device__
 void board2d_dev_init_copy(Board2DDevice *B_dst, const Board2DDevice *B_src) {

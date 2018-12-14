@@ -9,6 +9,15 @@
 __device__ __inline__
 void nglinehyp_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
                            NonogramColor color, unsigned i) {
+
+#ifdef DEBUG
+    if (i >= L->len) {
+    printf("nglinehyp_dev_cell_solve error: Tried to access index %d from %b line %d",
+            i, L->line_is_row, L->line_index);
+        return;
+    }
+#endif
+
     if (L->data[i] == color) return;
     if (L->data[i] == NGCOLOR_UNKNOWN) {
         unsigned x, y;
@@ -29,10 +38,9 @@ void nglinehyp_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
 
 }
 
-
 __device__ __inline__
 bool nglinehyp_dev_run_top_adjust(NonogramLineDevice *L, Board2DDevice *B,
-                                  unsigned &topEnd, unsigned line_len, unsigned run_len) {
+                                  unsigned char &topEnd, unsigned line_len, unsigned run_len) {
 
     if (topEnd < line_len && L->data[topEnd] == NGCOLOR_BLACK) {
         topEnd++;
@@ -65,7 +73,7 @@ bool nglinehyp_dev_run_top_adjust(NonogramLineDevice *L, Board2DDevice *B,
 
 __device__ __inline__
 bool nglinehyp_dev_run_bot_adjust(NonogramLineDevice *L, Board2DDevice *B,
-                                  unsigned &botStart, unsigned line_len, unsigned run_len) {
+                                  unsigned char &botStart, unsigned line_len, unsigned run_len) {
 
     if (botStart > 0 && L->data[botStart - 1] == NGCOLOR_BLACK) {
         botStart--;
@@ -181,14 +189,15 @@ void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned r
     nglinehyp_dev_run_bot_prop(L);
 
     // Fill overlaps
-
     nglinehyp_dev_run_fill_black(L, B, R, run_len);
+    if (!B->valid) return;
 
     // Add the padding to the front of each run
     nglinehyp_dev_run_fill_white(L, B, run_index);
+    if (!B->valid) return;
 
     // Add the padding at the end of the line
-    if (run_index == 0) nglinehyp_dev_run_fill_white(L, B, L->constr_len);
+    if (run_index == L->constr_len - 1) nglinehyp_dev_run_fill_white(L, B, L->constr_len);
 
 }
 
@@ -302,27 +311,27 @@ void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
 
 }
 
-__device__
+__host__ __device__
 unsigned nghyp_heuristic_rc2i(Heuristic *X, unsigned r, unsigned c) {
     return r * X->w + c;
 }
 
-__device__
+__host__ __device__
 void nghyp_heuristic_i2rc(Heuristic *X, unsigned i) {
     X->r_max = i / X->w;
     X->c_max = i % X->w;
 }
 
-__device__
+__host__ __device__
 void nghyp_heuristic_set(Heuristic *X, unsigned r, unsigned c, char val) {
     X->data[nghyp_heuristic_rc2i(X, r, c)] = val;
 }
-__device__
+__host__ __device__
 void nghyp_heuristic_set(Heuristic *X, unsigned i, char val) {
     X->data[i] = val;
 }
 
-__device__
+__host__ __device__
 char nghyp_heuristic_get(Heuristic *X, unsigned r, unsigned c) {
     return X->data[nghyp_heuristic_rc2i(X, r, c)];
 }
@@ -352,15 +361,16 @@ bool nghyp_heuristic_init(NonogramLineDevice *Ls, Board2DDevice *B, Heuristic **
 
 }
 
-Heuristic *nghyp_heuristic_init_dev(NonogramLineDevice *Ls, Board2DDevice *B) {
+#ifdef __NVCC__
+Heuristic *nghyp_heuristic_init_dev(unsigned w, unsigned h) {
 
     void *X_dev;
     Heuristic X_tmp_val;
     Heuristic* X_tmp = &X_tmp_val;
 
-    X_tmp->w = B->w;
-    X_tmp->h = B->h;
-    unsigned X_data_size = B->w * B->h * sizeof(char);
+    X_tmp->w = w;
+    X_tmp->h = h;
+    unsigned X_data_size = w * h * sizeof(char);
 
     cudaCheckError(cudaMalloc((void **)&X_tmp->data, X_data_size));
 
@@ -369,6 +379,7 @@ Heuristic *nghyp_heuristic_init_dev(NonogramLineDevice *Ls, Board2DDevice *B) {
     return (Heuristic *)X_dev;
 
 }
+#endif
 
 void nghyp_heuristic_free(Heuristic *X) {
 
@@ -377,6 +388,7 @@ void nghyp_heuristic_free(Heuristic *X) {
 
 }
 
+#ifdef __NVCC__
 void nghyp_heuristic_free_dev(Heuristic *X_dev) {
 
     Heuristic X_tmp_val;
@@ -387,11 +399,12 @@ void nghyp_heuristic_free_dev(Heuristic *X_dev) {
     cudaCheckError(cudaFree(X_dev));
 
 }
+#endif
 
 __device__
 void nghyp_heuristic_cell(const NonogramLineDevice *Ls, const Board2DDevice *B, Heuristic *X, unsigned r, unsigned c) {
 
-    if (r >= B->h || c >= B->w) return;
+    if (r >= X->h || c >= X->w) return;
 
     if (board2d_dev_elem_get_rm(B, c, r) != NGCOLOR_UNKNOWN) {
         nghyp_heuristic_set(X, r, c, -1);
@@ -468,14 +481,18 @@ void nghyp_heuristic_fill(const NonogramLineDevice *Ls, const Board2DDevice *B, 
 
     unsigned thPerBlockPerDim = 16;
 
-    dim3 blockArr((h + thPerBlockPerDim - 1) / thPerBlockPerDim, (w + thPerBlockPerDim - 1) / thPerBlockPerDim);
-    dim3 threadArr(thPerBlockPerDim, thPerBlockPerDim);
-
+    dim3 blockArr((h + thPerBlockPerDim - 1) / thPerBlockPerDim, (w + thPerBlockPerDim - 1) / thPerBlockPerDim, 1);
+    dim3 threadArr(thPerBlockPerDim, thPerBlockPerDim, 1);
+#ifdef DEBUG
+        std::cout << "Heuristic filling kernel starting..." << std::endl;
+#endif
     nghyp_heuristic_fill_kernel<<<blockArr, threadArr>>>(Ls, B, X);
+
 #ifdef DEBUG
     cudaCheckError(cudaGetLastError());
     cudaDeviceSynchronize();
     cudaCheckError(cudaGetLastError());
+    std::cout << "Heuristic filling kernel finished." << std::endl;
 #endif
 
 }
@@ -499,7 +516,7 @@ void nghyp_heuristic_update(HypotheticalBoard *H, Heuristic *X, NonogramColor co
 
 #ifdef DEBUG
     if (board2d_dev_elem_get_rm(H->B, X->c_max, X->r_max) != NGCOLOR_UNKNOWN) {
-        printf("Hypothesis (r, c) error");
+        printf("Hypothesis error: Cell already filled with %d\n", board2d_dev_elem_get_rm(H->B, X->c_max, X->r_max));
         return;
     }
 #endif
@@ -510,10 +527,8 @@ void nghyp_heuristic_update(HypotheticalBoard *H, Heuristic *X, NonogramColor co
 
 }
 
-
 #ifdef __NVCC__
-
-#define NUM_THREADS 1024
+#define HEUR_NUM_THREADS 1024
 __device__ __inline__
 int2 nghyp_heuristic_element_reduce(int2 A, int2 B) {
     return A.x > B.x ? A : B;
@@ -521,20 +536,20 @@ int2 nghyp_heuristic_element_reduce(int2 A, int2 B) {
 
 __global__
 void nghyp_heuristic_max_kernel(Heuristic *X, unsigned X_data_len) {
-    __shared__ int2 s_data[NUM_THREADS];
+    __shared__ int2 s_data[HEUR_NUM_THREADS];
     unsigned t_idx = threadIdx.x;
 
     int2 acc = make_int2((int) X->data[t_idx], t_idx);
 
     // Accumulate until fits in threads
-    for (int i = t_idx + NUM_THREADS; i < X_data_len; i += NUM_THREADS) {
+    for (int i = t_idx + HEUR_NUM_THREADS; i < X_data_len; i += HEUR_NUM_THREADS) {
         int2 tmp_val = make_int2((int) X->data[i], i);
         acc = nghyp_heuristic_element_reduce(acc, tmp_val);
     }
     s_data[t_idx] = acc;
     __syncthreads();
 
-    for (unsigned s = NUM_THREADS / 2; s > 0; s >>= 1) {
+    for (unsigned s = HEUR_NUM_THREADS / 2; s > 0; s >>= 1) {
         if (t_idx < s) s_data[t_idx] = nghyp_heuristic_element_reduce(s_data[t_idx], s_data[t_idx + s]);
         __syncthreads();
     }
@@ -545,10 +560,9 @@ void nghyp_heuristic_max_kernel(Heuristic *X, unsigned X_data_len) {
     }
 }
 
-void nghyp_heuristic_max(Heuristic *X) {
+void nghyp_heuristic_max_dev(Heuristic *X, unsigned X_data_len) {
 
-    unsigned X_data_len = X->w * X->h;
-    nghyp_heuristic_max_kernel<<<1, NUM_THREADS>>>(X, X_data_len);
+    nghyp_heuristic_max_kernel<<<1, HEUR_NUM_THREADS>>>(X, X_data_len);
 #ifdef DEBUG
     cudaCheckError(cudaGetLastError());
     cudaDeviceSynchronize();
@@ -591,6 +605,7 @@ HypotheticalBoard nghyp_init(NonogramLineDevice *Ls, Board2DDevice *B) {
 
 }
 
+#ifdef __NVCC__
 HypotheticalBoard *nghyp_init_dev(NonogramLineDevice *Ls_dev, Board2DDevice *B_dev) {
 
     void *pH;
@@ -598,6 +613,7 @@ HypotheticalBoard *nghyp_init_dev(NonogramLineDevice *Ls_dev, Board2DDevice *B_d
     return (HypotheticalBoard *)pH;
 
 }
+#endif
 
 void nghyp_free(HypotheticalBoard H) {
 
@@ -629,7 +645,7 @@ bool nghyp_valid_check(HypotheticalBoard *H, Board2DDevice *B) {
     if (H->B->valid) return true;
 
 #ifdef DEBUG
-    if (board2d_dev_elem_get(B, H->col, H->row) != NGCOLOR_UNKNOWN) {
+    if (board2d_dev_elem_get_rm(B, H->col, H->row) != NGCOLOR_UNKNOWN) {
         fprintf(stderr, "Hypothesis is a conflict\n");
         return false;
     }

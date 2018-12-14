@@ -61,7 +61,7 @@ void ngline_init_dev(NonogramLineDevice *L) {
 }
 
 __device__ __inline__
-bool ngline_dev_run_top_adjust(NonogramLineDevice *L, unsigned &topEnd, unsigned line_len, unsigned run_len) {
+bool ngline_dev_run_top_adjust(NonogramLineDevice *L, unsigned char &topEnd, unsigned line_len, unsigned run_len) {
 
     if (topEnd < line_len && L->data[topEnd] == NGCOLOR_BLACK) {
         topEnd++;
@@ -85,7 +85,7 @@ bool ngline_dev_run_top_adjust(NonogramLineDevice *L, unsigned &topEnd, unsigned
 }
 
 __device__ __inline__
-bool ngline_dev_run_bot_adjust(NonogramLineDevice *L, unsigned &botStart, unsigned line_len, unsigned run_len) {
+bool ngline_dev_run_bot_adjust(NonogramLineDevice *L, unsigned char &botStart, unsigned line_len, unsigned run_len) {
 
     if (botStart > 0 && L->data[botStart - 1] == NGCOLOR_BLACK) {
         botStart--;
@@ -342,11 +342,9 @@ bool ng_linearr_init_host(unsigned w, unsigned h, NonogramLineDevice **Ls) {
 
 }
 
+#ifdef __NVCC__
 NonogramLineDevice *ng_linearr_init_dev(unsigned w, unsigned h, NonogramLineDevice *Ls_host) {
 
-#ifdef DEBUG
-    std::cout << __func__ << " called" << std::endl;
-#endif
     void *Ls_dev;
     size_t Ls_size = sizeof(NonogramLineDevice) * (w + h);
 
@@ -356,12 +354,15 @@ NonogramLineDevice *ng_linearr_init_dev(unsigned w, unsigned h, NonogramLineDevi
     return (NonogramLineDevice *)Ls_dev;
 
 }
+#endif
 
+#ifdef __NVCC__
 void ng_linearr_free_dev(NonogramLineDevice *Ls_dev) {
 
     cudaCheckError(cudaFree(Ls_dev));
 
 }
+#endif
 
 NonogramLineDevice *ng_linearr_deepcopy_host(NonogramLineDevice *Ls, unsigned w, unsigned h) {
 
@@ -379,6 +380,7 @@ NonogramLineDevice *ng_linearr_deepcopy_host(NonogramLineDevice *Ls, unsigned w,
 
 }
 
+#ifdef __NVCC__
 NonogramLineDevice *ng_linearr_deepcopy_dev_double(NonogramLineDevice *Ls, unsigned Ls_size) {
 
     NonogramLineDevice *Ls_dcopy;
@@ -390,6 +392,7 @@ NonogramLineDevice *ng_linearr_deepcopy_dev_double(NonogramLineDevice *Ls, unsig
     return Ls_dcopy;
 
 }
+#endif
 
 void ng_linearr_board_change(NonogramLineDevice *Ls, Board2DDevice *B) {
 

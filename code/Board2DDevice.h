@@ -36,11 +36,21 @@ void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColo
 
 __host__ __device__ __inline__
 NonogramColor board2d_dev_elem_get_rm(const Board2DDevice *B, unsigned x, unsigned y) {
+#ifdef DEBUG
+    if (x >= B->w || y >= B->h) {
+        printf("nglinehyp_dev_cell_solve error: Tried to access (%d, %d)\n", y, x);
+    }
+#endif
     return B->data[y * B->w + x];
 }
 
 __host__ __device__ __inline__
 NonogramColor board2d_dev_elem_get_cm(const Board2DDevice *B, unsigned x, unsigned y) {
+#ifdef DEBUG
+    if (x >= B->w || y >= B->h) {
+        printf("nglinehyp_dev_cell_solve error: Tried to access (%d, %d)\n", y, x);
+    }
+#endif
     return B->dataCM[x * B->h + y];
 }
 
