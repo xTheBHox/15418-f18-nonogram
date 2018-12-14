@@ -160,16 +160,17 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
     do {
 
         B->dirty = false;
-    /*
-    // Because of the nature of a solvable Nonogram, it is possible to
-    // simultaneously do the rows and columns because they will only ever
-    // write correct values.
-    if (!L->solved) {
-        for (unsigned ri = 0; ri < L->constr_len; ri++) {
-            ngline_dev_run_solve(L, B, ri);
+
+        // Because of the nature of a solvable Nonogram, it is possible to
+        // simultaneously do the rows and columns because they will only ever
+        // write correct values.
+        if (!L->solved) {
+            for (unsigned ri = 0; ri < L->constr_len; ri++) {
+                ngline_dev_run_solve(L, B, ri);
+            }
         }
-    }
-    */
+
+    /*
         if (L->line_is_row) { // Solve rows
             if (!L->solved) {
                 for (unsigned ri = 0; ri < L->constr_len; ri++) {
@@ -177,7 +178,7 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
                 }
             }
         }
-        __syncthreads();
+        //__syncthreads();
         if (!L->line_is_row) { // Solve columns
             if (!L->solved) {
                 for (unsigned ri = 0; ri < L->constr_len; ri++) {
@@ -185,6 +186,7 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
                 }
             }
         }
+        */
         __syncthreads();
 
         if (B->dirty) continue;
@@ -264,7 +266,7 @@ bool ng_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 __global__
 void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global, Heuristic *X,
         unsigned Ls_size, const unsigned B_data_size, const bool Ls_shared,
-        const NonogramLineDevice *Ls_original,
+        NonogramLineDevice *Ls_original,
         unsigned *B_lock, volatile int *B_status) {
 
     unsigned i = threadIdx.x;
@@ -302,7 +304,7 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
     }
 
 
-    const NonogramLineDevice *L_global;
+    NonogramLineDevice *L_global;
     if (Ls_shared) L_global = &Ls_global[i];
     else L_global = &Ls_original[i];
 
@@ -349,16 +351,15 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
 
     do {
         B->dirty = false;
-    /*
-    // Because of the nature of a solvable Nonogram, it is possible to
-    // simultaneously do the rows and columns because they will only ever
-    // write correct values.
-    if (!L->solved) {
-        for (unsigned ri = 0; ri < L->constr_len; ri++) {
-            ngline_dev_run_solve(L, B, ri);
+        // Because of the nature of a solvable Nonogram, it is possible to
+        // simultaneously do the rows and columns because they will only ever
+        // write correct values.
+        if (!L->solved) {
+            for (unsigned ri = 0; ri < L->constr_len; ri++) {
+                nglinehyp_dev_run_solve(L, B, ri);
+            }
         }
-    }
-    */
+        /*
         if (L->line_is_row) { // Solve rows
             if (!L->solved) {
                 for (unsigned ri = 0; ri < L->constr_len; ri++) {
@@ -378,13 +379,14 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
                 }
             }
         }
+        */
         __syncthreads();
         if (!B->valid) {
             break;
         }
 
         // TOOD decide whether this is useful
-        if (B->dirty) continue;
+        // if (B->dirty) continue;
 
         if (!L->solved) nglinehyp_dev_block_solve(L, B);
 
@@ -481,6 +483,7 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
             for (unsigned j = 0; j < L->len; j++) {
                 nghyp_confirm_unassume(L_global, B_global, j);
             }
+            nglinehyp_dev_block_solve(L_global, B_global);
             return;
         }
         else if (B->solved) {
@@ -499,6 +502,7 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
             for (unsigned j = 0; j < L->len; j++) {
                 nghyp_hyp_unassume(L, L_global, B_global, j);
             }
+            nglinehyp_dev_block_solve(L_global, B_global);
             return;
         }
     }

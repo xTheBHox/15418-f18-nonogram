@@ -245,7 +245,7 @@ void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
         // Get the run valid run indexes
         while (L->b_runs[ri_first].botStart + L->constr[ri_first] < block_end) ri_first++;
         ri_last = ri_first;
-        while (ri_last < L->constr_len && L->b_runs[ri_last].topEnd - L->constr[ri_last] <= block_start) {
+        while (ri_last < L->constr_len && L->b_runs[ri_last].topEnd <= block_start + L->constr[ri_last]) {
             unsigned run_len = L->constr[ri_last];
             // Check that the run length will fit the block
             if (block_len_min <= run_len && run_len <= block_len_max) {
