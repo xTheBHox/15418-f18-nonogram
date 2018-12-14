@@ -2,7 +2,6 @@
 // Created by Benjamin Huang on 11/19/2018.
 //
 #include "NonogramLineDevice.h"
-#include "Board2DDevice.h"
 
 // #define DEBUG
 
@@ -20,6 +19,11 @@ void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
             y = i;
         }
         board2d_dev_elem_set(B, x, y, color);
+
+#ifdef DISP
+        mvaddch(y, x, ngramColorToChar(color));
+        refresh();
+#endif
     }
 }
 

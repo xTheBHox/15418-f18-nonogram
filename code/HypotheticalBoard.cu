@@ -3,8 +3,6 @@
 //
 
 #include "HypotheticalBoard.h"
-#include "NonogramLineDevice.h"
-#include "Board2DDevice.h"
 
 __device__ __inline__
 void nglinehyp_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
@@ -12,7 +10,7 @@ void nglinehyp_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
 
 #ifdef DEBUG
     if (i >= L->len) {
-    printf("nglinehyp_dev_cell_solve error: Tried to access index %d from %b line %d",
+    printf("nglinehyp_dev_cell_solve error: Tried to access index %d from %d line %d",
             i, L->line_is_row, L->line_index);
         return;
     }
@@ -30,6 +28,10 @@ void nglinehyp_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
             y = i;
         }
         board2d_dev_elem_set(B, x, y, color);
+        #ifdef DISP
+            mvaddch(y, x, ngramColorToChar(ngramColorToHypColor(color)));
+            refresh();
+        #endif
         return;
     }
 
@@ -632,6 +634,15 @@ void nghyp_hyp_confirm(HypotheticalBoard *H, Board2DDevice **B, NonogramLineDevi
     *Ls = H->Ls;
     H->Ls = tmp_Ls;
 
+#ifdef DISP
+    for (unsigned r = 0; r < (*B)->h; r++) {
+        for (unsigned c = 0; c < (*B)->w; c++) {
+            mvaddch(r, c, ngramColorToChar(board2d_dev_elem_get_rm(*B, c, r)));
+        }
+    }
+    refresh();
+#endif
+
 }
 
 /**
@@ -651,8 +662,22 @@ bool nghyp_valid_check(HypotheticalBoard *H, Board2DDevice *B) {
     }
 #endif
 
-    if (H->guess_color == NGCOLOR_BLACK) board2d_dev_elem_set(B, H->col, H->row, NGCOLOR_WHITE);
-    else if (H->guess_color == NGCOLOR_WHITE) board2d_dev_elem_set(B, H->col, H->row, NGCOLOR_BLACK);
+    if (H->guess_color == NGCOLOR_BLACK) {
+        board2d_dev_elem_set(B, H->col, H->row, NGCOLOR_WHITE);
+
+#ifdef DISP
+        mvaddch(H->row, H->col, ngramColorToChar(NGCOLOR_WHITE));
+        refresh();
+#endif
+    }
+    else if (H->guess_color == NGCOLOR_WHITE) {
+        board2d_dev_elem_set(B, H->col, H->row, NGCOLOR_BLACK);
+
+#ifdef DISP
+        mvaddch(H->row, H->col, ngramColorToChar(NGCOLOR_BLACK));
+        refresh();
+#endif
+    }
     B->dirty = true;
     return false;
 
@@ -667,9 +692,20 @@ void nghyp_common_set(HypotheticalBoard *H1, HypotheticalBoard *H2, Board2DDevic
                 if (color != NGCOLOR_UNKNOWN &&
                     color == board2d_dev_elem_get_rm(H2->B, c, r)) {
                     board2d_dev_elem_set(B, c, r, color);
+#ifdef DISP
+                    mvaddch(r, c, ngramColorToChar(color));
+#endif
                     B->dirty = true;
                 }
+#ifdef DISP
+                else {
+                    mvaddch(r, c, ngramColorToChar(NGCOLOR_UNKNOWN));
+                }
+#endif
             }
         }
     }
+#ifdef DISP
+    refresh();
+#endif
 }

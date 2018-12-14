@@ -5,6 +5,7 @@
 #ifndef CODE_BOARD2DDEVICE_H
 #define CODE_BOARD2DDEVICE_H
 
+
 #include <cstdlib>
 #include <cstdio>
 #include <iostream>
@@ -32,6 +33,7 @@ void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColo
     B->data[y * B->w + x] = val;
     B->dataCM[x * B->h + y] = val;
     B->dirty = true;
+    
 }
 
 __host__ __device__ __inline__

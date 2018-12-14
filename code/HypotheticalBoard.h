@@ -7,6 +7,9 @@
 
 #include "Board2DDevice.h"
 #include "NonogramLineDevice.h"
+#ifdef DISP
+#include <ncurses.h>
+#endif
 
 typedef struct _HypotheticalBoard HypotheticalBoard;
 

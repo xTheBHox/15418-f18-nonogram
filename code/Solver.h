@@ -11,6 +11,10 @@
 #include "NonogramLineDevice.h"
 #include "HypotheticalBoard.h"
 
+#ifdef DISP
+#include <ncurses.h>
+#endif
+
 bool ng_init(unsigned w, unsigned h, NonogramLineDevice **Ls, Board2DDevice **B);
 void ng_free(NonogramLineDevice *Ls, Board2DDevice *B);
 bool ng_constr_add(NonogramLineDevice *Ls, unsigned line_index, unsigned constr);

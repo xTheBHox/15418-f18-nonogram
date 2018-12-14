@@ -6,7 +6,6 @@
 
 // #define DEBUG
 
-
 #ifdef __NVCC__
 __global__
 void ngline_init_kernel(Board2DDevice *B, NonogramLineDevice *Ls) {
@@ -170,29 +169,14 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
             }
         }
 
-    /*
-        if (L->line_is_row) { // Solve rows
-            if (!L->solved) {
-                for (unsigned ri = 0; ri < L->constr_len; ri++) {
-                    ngline_dev_run_solve(L, B, ri);
-                }
-            }
-        }
-        //__syncthreads();
-        if (!L->line_is_row) { // Solve columns
-            if (!L->solved) {
-                for (unsigned ri = 0; ri < L->constr_len; ri++) {
-                    ngline_dev_run_solve(L, B, ri);
-                }
-            }
-        }
-        */
+        // TODO remove this too
         __syncthreads();
 
         if (B->dirty) continue;
 
         if (!L->solved) ngline_dev_block_solve(L, B);
 
+        // TODO remove this too
         __syncthreads();
 
     } while (B->dirty);
@@ -359,27 +343,7 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
                 nglinehyp_dev_run_solve(L, B, ri);
             }
         }
-        /*
-        if (L->line_is_row) { // Solve rows
-            if (!L->solved) {
-                for (unsigned ri = 0; ri < L->constr_len; ri++) {
-                    nglinehyp_dev_run_solve(L, B, ri);
-                }
-            }
-        }
-        __syncthreads();
-        if (!B->valid) {
-            break;
-        }
-
-        if (!L->line_is_row) { // Solve columns
-            if (!L->solved) {
-                for (unsigned ri = 0; ri < L->constr_len; ri++) {
-                    nglinehyp_dev_run_solve(L, B, ri);
-                }
-            }
-        }
-        */
+        // TODO remove this too
         __syncthreads();
         if (!B->valid) {
             break;
@@ -390,6 +354,7 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
 
         if (!L->solved) nglinehyp_dev_block_solve(L, B);
 
+        // TODO remove this too
         __syncthreads();
         if (!B->valid) {
             break;
@@ -740,7 +705,7 @@ void ng_solve_seq(NonogramLineDevice **pLs_dev, Board2DDevice **pB_dev) {
 
 #ifdef DEBUG
         std::cout << "Simple solving dead-end:" << std::endl;
-        std::cout << B_dev;
+        // std::cout << B_dev;
 #endif
 
         while (!B_dev->dirty) {
@@ -754,7 +719,7 @@ void ng_solve_seq(NonogramLineDevice **pLs_dev, Board2DDevice **pB_dev) {
 #ifdef DEBUG
             std::cout << "Hypothesis on black (" << H_b.row << ", " << H_b.col << ")" << std::endl;
             std::cout << "Sovled: " << solved << "\tValid: " << H_b.B->valid << std::endl;
-            std::cout << H_b.B;
+            // std::cout << H_b.B;
 #endif
 
             if (solved) {
@@ -778,7 +743,7 @@ void ng_solve_seq(NonogramLineDevice **pLs_dev, Board2DDevice **pB_dev) {
 #ifdef DEBUG
             std::cout << "Hypothesis on white (" << H_w.row << ", " << H_w.col << ")" << std::endl;
             std::cout << "Sovled: " << solved << "\tValid: " << H_w.B->valid << std::endl;
-            std::cout << H_w.B;
+            // std::cout << H_w.B;
 #endif
 
             if (solved) {
@@ -820,7 +785,17 @@ void ng_solve(NonogramLineDevice **pLs_host, Board2DDevice **pB_host) {
 #ifdef __NVCC__
     ng_solve_par(*pLs_host, *pB_host);
 #else
+#ifdef DISP
+    initscr();
+#endif
+
     ng_solve_seq(pLs_host, pB_host);
+
+#ifdef DISP
+    mvprintw((*pB_host)->h, 0, "Completed. Press any key to exit.");
+    getch();
+    endwin();
+#endif
 #endif
 
 }

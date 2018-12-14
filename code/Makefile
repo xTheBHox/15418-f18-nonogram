@@ -10,7 +10,7 @@ DBGFLAGS= -D DEBUG  -g
 NVCC=nvcc -m64
 NVCCFLAGS=-O3 -std=c++11 -D PERF --gpu-architecture compute_61 --gpu-code sm_61
 NVCCDBGFLAGS=$(DBGFLAGS) -G
-LDFLAGS=-L /usr/local/depot/cuda-8.0/lib64/ -l cudart
+LDFLAGS=-L /usr/local/depot/cuda-8.0/lib64/ -l cudart 
 SEQDIR=objseq
 PARDIR=objpar
 
@@ -31,6 +31,9 @@ debug: clean $(EXECPAR)
 debug-seq: CXXFLAGS += $(DBGFLAGS)
 debug-seq: clean-seq $(EXECSEQ)
 
+display: CXXFLAGS += -D DISP -U PERF -l ncurses
+display: clean-seq $(EXECSEQ)
+
 dirs:
 		mkdir -p $(SEQDIR)/
 		mkdir -p $(PARDIR)/
@@ -47,7 +50,7 @@ $(SEQDIR)/%.o: %.cpp
 	$(CXX) -c -o $@ $(CXXFLAGS) $<
 
 $(SEQDIR)/%.o: %.cu
-	$(CXX) -c -o $@ $(CXXFLAGS) -x c++ $<
+	$(CXX) -c -o $@ $(CXXFLAGS) -x c++ $< 
 
 $(EXECPAR): dirs $(OBJPAR)
 	$(NVCC) -o $@ $(NVCCFLAGS) -D __NVCC__ $(LDFLAGS) $(OBJPAR)
