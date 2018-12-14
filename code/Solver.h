@@ -6,6 +6,7 @@
 #define CODE_SOLVER_H
 
 #include "Defs.h"
+#include <omp.h>
 
 #include "Board2DDevice.h"
 #include "NonogramLineDevice.h"

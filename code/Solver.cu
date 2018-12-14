@@ -232,7 +232,7 @@ bool ng_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 
     do {
         B->dirty = false;
-
+        #pragma omp parallel for schedule(dynamic, 1)
         for (unsigned i = 0; i < B->h + B->w; i++) {
             NonogramLineDevice *L = &Ls[i];
             if (L->solved) continue;
@@ -243,6 +243,7 @@ bool ng_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 
         if (B->dirty) continue;
 
+        #pragma omp parallel for schedule(dynamic, 1)
         for (unsigned i = 0; i < B->h + B->w; i++) {
             NonogramLineDevice *L = &Ls[i];
             if (L->solved) continue;
@@ -574,21 +575,24 @@ bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
     do {
         B->dirty = false;
 
+        #pragma omp parallel for schedule(dynamic, 1)
         for (unsigned i = 0; i < B->h + B->w; i++) {
             NonogramLineDevice *L = &Ls[i];
             if (L->solved) continue;
             for (unsigned ri = 0; ri < L->constr_len; ri++) {
                 nglinehyp_dev_run_solve(L, B, ri);
-                if (!B->valid) return false;
+                if (!B->valid) break;
             }
         }
+        if (!B->valid) break;
 
+        #pragma omp parallel for schedule(dynamic, 1)
         for (unsigned i = 0; i < B->h + B->w; i++) {
             NonogramLineDevice *L = &Ls[i];
             if (L->solved) continue;
             nglinehyp_dev_block_solve(L, B);
-            if (!B->valid) return false;
         }
+        if (!B->valid) break;
 
     } while (B->dirty);
 
@@ -598,6 +602,7 @@ bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
         if (!L->solved) return false;
     }
 
+    if (!B->valid) return false;
     return true;
 
 }
