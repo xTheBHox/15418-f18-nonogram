@@ -163,9 +163,12 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
         // Because of the nature of a solvable Nonogram, it is possible to
         // simultaneously do the rows and columns because they will only ever
         // write correct values.
+        if (!L->solved) ngline_dev_run_solve(L, B);
+        /*
         if (L->line_is_row && !L->solved) ngline_dev_run_solve(L, B);
         __syncthreads();
         if (!L->line_is_row && !L->solved) ngline_dev_run_solve(L, B);
+        */
         __syncthreads();
 
         if (B->dirty) continue;
@@ -329,13 +332,12 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
     __syncthreads();
     do {
         B->dirty = false;
-        /*
         // Because of the nature of a solvable Nonogram, it is possible to
         // simultaneously do the rows and columns because they will only ever
         // write correct values.
 
         if (!L->solved) nglinehyp_dev_run_solve(L, B);
-        */
+        /*
         if (L->line_is_row && !L->solved) nglinehyp_dev_run_solve(L, B);
         __syncthreads();
         if (!B->valid) {
@@ -343,6 +345,7 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
         }
 
         if (!L->line_is_row && !L->solved) nglinehyp_dev_run_solve(L, B);
+        */
         __syncthreads();
         if (!B->valid) {
             break;
