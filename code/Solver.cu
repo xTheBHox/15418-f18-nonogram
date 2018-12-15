@@ -109,7 +109,6 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
         B->solved = true;
     }
 
-
     NonogramLineDevice *L_global = &Ls_global[i];
     NonogramLineDevice *L = &Ls[i];
     if (Ls_shared) {
@@ -345,11 +344,8 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
 
         // TODO remove this too
         __syncthreads();
-        if (!B->valid) {
-            break;
-        }
 
-    } while (B->dirty);
+    } while (B->dirty && B->valid);
 
     if (L->line_is_row && !L->solved) B->solved = false;
     // Now B->solved is valid
