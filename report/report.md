@@ -135,7 +135,7 @@ Also, when solving with a guessed cell (a hypothetical state), a single thread b
 
 # Results
 
-Because of the nature of human-friendly nonograms, even the hardest nonograms on webpbn.com were solved in less than 1 second on our solver. As a result, this severely limited any parallel speedup we could achieve.
+Because of the nature of human-friendly nonograms, even the hardest nonograms on webpbn.com were solved in less than 1 second on our solver both sequentially and in parallel. As a result, this severely limited any parallel speedup we could achieve.
 
 ## Memory
 
@@ -147,7 +147,7 @@ One of the attempted optimizations was to set the board pitch to a power of 2 to
 
 The amount of data being transferred was very small compared to typical transfers for a GPU. NVVP reported only a 17% memory transfer efficiency on #1739. This is hard to address since nonograms are small. Data transfer was already limited as much as possible even between shared and global device memory and global device and host memory, but often it was still necessary to set flags to tell the CPU about the results of the kernel to make decisions about what to do next. These small (but necessary) data transfers would have incurred a large overhead.
 
-Finally, due to extremely limited shared memory (48KB), only two boards can fit in shared memory at the same time. This meant that for lookahead solving, it was not possible to make more than two guesses (both on the same cell) and run in parallel without having to use global memory. Using global memory was not desirable since a copy of the board would have to be made, which would mean allocation, data transfer and eventually freeing the memory, incurring more overhead.
+Finally, due to extremely limited shared memory (48KB), only two boards can fit in shared memory at the same time. This meant that for lookahead solving, it was not possible to make more than two guesses (both on the same cell) and run in parallel without having to use global memory. Using global memory was not desirable since a copy of the board would still have to be made, which would mean allocation, data transfer and eventually freeing the memory, incurring more overhead.
 
 ## Divergence
 
@@ -163,4 +163,4 @@ Using a sparse matrix data structure for the hypothetical board, storing only ch
 
 It is possible that a different, more expensive heuristic not suited for sequential execution could work better on a GPU to reduce the number of guesses required. However, since execution time is already so short, it is unlikely to be significantly faster than the current system with the current heuristic.
 
-Consider using a CPU with a large number of cores, such as a Xeon Phi, which will handle divergent execution better. Nonetheless, data sharing especially for the board will be slower on such a device, which will affect the speedup that can be obtained.
+Consider using a CPU with a large number of cores, such as a Xeon Phi, which will handle divergent execution better. Nonetheless, data sharing especially for the board will be slower on such a device, which will affect the speedup that can be obtained. Thread creation overhead will likely also be an issue due to the already short computation time of the solver.
