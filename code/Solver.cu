@@ -104,11 +104,11 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
     // Get pointers
     extern __shared__ int _smem[];
     char *smem = (char *) _smem;
-    Board2DDevice *B = (Board2DDevice *)(smem + B_dataRM_size + B_dataCM_size + Ls_size);
+    Board2DDevice *B = (Board2DDevice *)smem;
     NonogramLineDevice *Ls;
 
     if (Ls_shared) {
-        Ls = (NonogramLineDevice *)(smem +  B_dataRM_size + B_dataCM_size);
+        Ls = (NonogramLineDevice *)(smem + sizeof(Board2DDevice));
     }
     else {
         Ls_size = 0;
@@ -117,8 +117,8 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
 
     if (i == 0) {
         board2d_dev_init_copy(B, B_global);
-        B->data = (NonogramColor *)smem;
-        B->dataCM =(NonogramColor *)(smem + B_dataRM_size);
+        B->data = (NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size);
+        B->dataCM =(NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size + B_dataRM_size);
         // WARNING DO NOT reference B->solved before updated by all threads!!!
         B->solved = true;
     }
@@ -303,14 +303,14 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
     // Get pointers
     extern __shared__ int _smem[];
     char *smem = (char *) _smem;
-    Board2DDevice *B = (Board2DDevice *)(smem + B_dataRM_size + B_dataCM_size + Ls_size);
+    Board2DDevice *B = (Board2DDevice *)smem;
     NonogramLineDevice *Ls;
     NonogramLineDevice *L_global;
     NonogramLineDevice *L;
 
     if (active) {
         if (Ls_shared) {
-            Ls = (NonogramLineDevice *)(smem + B_dataRM_size + B_dataCM_size);
+            Ls = (NonogramLineDevice *)(smem + sizeof(Board2DDevice));
         }
         else {
             Ls_size = 0;
@@ -319,8 +319,8 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
 
         if (i == 0) {
             board2d_dev_init_copy(B, B_global);
-            B->data = (NonogramColor *)smem;
-            B->dataCM =(NonogramColor *)(smem + B_dataRM_size);
+            B->data = (NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size);
+            B->dataCM =(NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size + B_dataRM_size);
             // WARNING DO NOT reference B->solved before updated by all threads!!!
             B->solved = true;
         }

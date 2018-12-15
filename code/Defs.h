@@ -41,7 +41,7 @@ auto __time ## timer_name = std::chrono::high_resolution_clock::now()
 #define TIMER_STOP(timer_name) \
 std::cout << #timer_name << ": " << \
 std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - __time ## timer_name ).count() \
-<< "ns" << std::endl
+<< " ns" << std::endl
 
 #else
 #define TIMER_START(timer_name)

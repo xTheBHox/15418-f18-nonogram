@@ -38,6 +38,7 @@ Board2DDevice *board2d_init_host(unsigned w, unsigned h) {
 
 #ifdef __NVCC__
 __inline__ unsigned nextPow2(unsigned n) {
+    // return n; USE THIS FOR UNPITCHED
     n--;
     n |= n >> 1;
     n |= n >> 2;
