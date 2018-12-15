@@ -17,7 +17,7 @@ The state of the cells of a nonogram can be represented by a matrix or board who
 Note that while the goal is a board with no unknowns that satisfies the associated constraints, it is possible that a particular board will contradict its constraints or be in such a state that a contradiction is implied in the future. This will be explained in more detail below.
 
 ## Operations
-Solving nonograms is an iterative process. Any given cell being determined means that other cells in its row and column can also possibly be determined with the new information. There are two basic kinds of operations involved in solving nonograms: simple solving, and lookahead solving. 
+Solving nonograms is an iterative process. Any given cell being determined means that other cells in its row and column can also possibly be determined with the new information. There are two basic kinds of operations involved in solving nonograms: simple solving, and lookahead solving.
 
 ### Simple solving
 One key operation involved in solving nonograms is advancing the state of any particular row or column, which will just be referred to as a line. Given a line and its list of constraints, a simple solve operation will (potentially) be able to change at least one unknown cell to either filled or unfilled. There are a variety of algorithms that can accomplish this, the simplest of which is illustrated below:
@@ -61,13 +61,13 @@ Simple solving techniques are relatively expensive individually. They involve it
 In total the simple solving techniques are also expensive because they must be repeatedly applied to every row of the board, as well as every column. As the board grows the expense of running all the solvers increases.
 
 ### Lookahead solving
-The process of lookahead solving outside of simple solving is not computationally expensive. If heuristics are used they can be be more expensive depending on which algorithm is chosen.
+The process of lookahead solving outside of simple solving is not computationally expensive. If heuristics are used they can be more expensive depending on which algorithm is chosen.
 
 ## Workload
 The workload for solving a puzzle consists of iterated simple solving and lookahead solving. Within simple solving there are dependencies between the row steps and column steps.
 
 ### Parallelism
-Simple solving techniques are applied to a single line (row or column) at a time. They read only the constraints for that line, as well as the contents of the cells in the line, and they write only to cells in the line. Thus simple solving on either every row or every cell can be done in parallel both computationally, and data-wise. 
+Simple solving techniques are applied to a single line (row or column) at a time. They read only the constraints for that line, as well as the contents of the cells in the line, and they write only to cells in the line. Thus simple solving on either every row or every cell can be done in parallel both computationally, and data-wise.
 
 Because the results from solving the rows are necessary for solving the columns and vice versa, solving rows and columns in parallel is possible but could potentially waste compute resources.
 
@@ -113,3 +113,22 @@ Another interesting optimization that was mentioned above was storing two copies
 In this case, it works particularly well because each line solver reads and writes only its particular line data. Additionally, writes are much less frequent because they only occur when correct values have been found. Compounding that is the fact there is often dependence between row solving and column solving.
 
 Consider the case where no new cells can be solved by the row solvers, but some can be by the column solvers, and both run at the same time. Then only the column solvers will update the board. On the next iteration, only the row solvers (if any) will update the board, and so on. This dependence means that while it's possible for the solvers to all run in parallel, the actual benefits are relatively minimal.
+
+### Heuristics
+To assist lookahead solving, a heuristic was used to determine which cell to make a guess in instead of guessing blindly. The heuristic works as follows, for each cell X:
+
+1) Check if X is between an white cell and an unknown cell, either in its row or its column.
+2) If it is, determine the number of cells in X_row and X_col directly affected if it is filled black. This is also the minimum length constraint that can still be matched by X. The number of cells is X_score. (X_score for the cells that do not satisfy (1) is -1).
+3) Determine the maximum score across the entire board. This cell is selected to guess.
+
+The heuristic works based on the idea that X is in a corner and the adjacent solved sides extend fairly far down the line. When X is filled, it causes a block of adjacent cells to also be filled both in the row and the column. The adjacent cells are likely to be edge cells, which will cause more blocks to fill, but this time only in either the row or the column. This quickly causes contradictions in the unsolved lines adjacent to X. We want to cause as much havoc as possible in the board, so we pick X such that it affects the most cells when filled in, hoping to quickly arrive at a contradiction and confirm X as unfilled.
+
+The nature of this heuristic is also that it is extremely parallelizable. Determining the score for each cell is done independently of all the other cells, and is spatially local to the cell itself. The line solvers keep a record of the possible run positions, so the cells also only access their respective row and column solvers to determine their score. Finally, a reduction is performed on the entire board.
+
+### Lookahead solving
+
+When both guesses of lookahead solving reach an unknown state (no contradiction) it is not always necessary to completely discard the results. By comparing the two guesses' results, the cells which are common to both guesses are certain and can be updated on the master board.
+
+In cases when there are no common cells and no progress can be made on either guess (black or white), then there are two options: either make a second guess from the states created by the first guess, or cancel the first guess and make a different guess. Because making further guesses (going depth-first) requires a lot of memory to track state and we are limited on GPU shared memory, we opt to use breath-first instead. First, this allows the heuristic previously computed to be reused after discounting the cell used in the first guess.
+
+Also, when solving with a guessed cell (a hypothetical state), a single thread block is used. The hypothetical board is kept only in the block's shared memory, and eventually, only modified cells are eventually written back to the master board in global memory if necessary. In case of a contradiction, the shared memory can simply be discarded. This helps to reduce data transfer to and from the GPU.
