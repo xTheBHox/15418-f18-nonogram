@@ -87,6 +87,18 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
         const bool Ls_shared) {
 
     unsigned i = threadIdx.x;
+    bool active = false;
+
+    if (i < MAX_SOLVERS / 2) {
+        if (i < B_global->h) active = true;
+    }
+    else {
+        i = i - MAX_SOLVERS / 2;
+        if (i < B_global->w) {
+            active = true;
+            i += B_global->h;
+        }
+    }
 
     // BEGIN Shared memory copy. Need all of Ls and B in shared memory.
     // Get pointers
@@ -111,43 +123,50 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
         B->solved = true;
     }
 
-    NonogramLineDevice *L_global = &Ls_global[i];
-    NonogramLineDevice *L = &Ls[i];
-    if (Ls_shared) {
-        // Copy Ls;
-        *L = *L_global;
+    NonogramLineDevice *L_global;
+    NonogramLineDevice *L;
+    if (active) {
+        L_global = &Ls_global[i];
+        L = &Ls[i];
+        if (Ls_shared) {
+            // Copy Ls;
+            *L = *L_global;
+        }
     }
 
     // Need to make sure master finished copying B and the B pointers
     __syncthreads();
 
     NonogramColor *L_data_global;
-    if (Ls_shared) {
-        // Update the Ls data pointers
-        if (L->line_is_row) {
-            L->data = board2d_dev_row_ptr_get(B, L->line_index);
+    if (active) {
+
+        if (Ls_shared) {
+            // Update the Ls data pointers
+            if (L->line_is_row) {
+                L->data = board2d_dev_row_ptr_get(B, L->line_index);
+            }
+            else {
+                L->data = board2d_dev_col_ptr_get(B, L->line_index);
+            }
+
+            // Copy respective board row/col. WARNING DOES NOT RESPECT INTERFACE!!!
+            for (unsigned j = 0; j < L->len; j++) {
+                L->data[j] = L_global->data[j];
+            }
         }
         else {
-            L->data = board2d_dev_col_ptr_get(B, L->line_index);
-        }
+            // Update the Ls data pointers
+            L_data_global = L->data;
+            if (L->line_is_row) {
+                L->data = board2d_dev_row_ptr_get(B, L->line_index);
+            }
+            else {
+                L->data = board2d_dev_col_ptr_get(B, L->line_index);
+            }
 
-        // Copy respective board row/col. WARNING DOES NOT RESPECT INTERFACE!!!
-        for (unsigned j = 0; j < L->len; j++) {
-            L->data[j] = L_global->data[j];
-        }
-    }
-    else {
-        // Update the Ls data pointers
-        L_data_global = L->data;
-        if (L->line_is_row) {
-            L->data = board2d_dev_row_ptr_get(B, L->line_index);
-        }
-        else {
-            L->data = board2d_dev_col_ptr_get(B, L->line_index);
-        }
-
-        for (unsigned j = 0; j < L->len; j++) {
-            L->data[j] = L_data_global[j];
+            for (unsigned j = 0; j < L->len; j++) {
+                L->data[j] = L_data_global[j];
+            }
         }
     }
 
@@ -166,50 +185,54 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
         // Because of the nature of a solvable Nonogram, it is possible to
         // simultaneously do the rows and columns because they will only ever
         // write correct values.
-        if (!L->solved) dirty |= ngline_dev_run_solve(L, B);
-        /*
-        if (L->line_is_row && !L->solved) ngline_dev_run_solve(L, B);
-        __syncthreads();
-        if (!L->line_is_row && !L->solved) ngline_dev_run_solve(L, B);
-        */
-        //dirty = __syncthreads_or(dirty);
-        //if (dirty) continue;
+        if (active) {
+            if (!L->solved) dirty |= ngline_dev_run_solve(L, B);
+            /*
+            if (L->line_is_row && !L->solved) ngline_dev_run_solve(L, B);
+            __syncthreads();
+            if (!L->line_is_row && !L->solved) ngline_dev_run_solve(L, B);
+            */
+            //dirty = __syncthreads_or(dirty);
+            //if (dirty) continue;
 
-        if (!L->solved) dirty |= ngline_dev_block_solve(L, B);
+            if (!L->solved) dirty |= ngline_dev_block_solve(L, B);
 
-        // TODO remove this too
+            // TODO remove this too
+        }
         dirty = __syncthreads_or(dirty);
 
     } while (dirty);
 
-    if (L->line_is_row && !L->solved) B->solved = false;
-    // Now B->solved is valid
+    if (active) {
+        if (L->line_is_row && !L->solved) B->solved = false;
+        // Now B->solved is valid
 #ifdef DEBUG
-    if (i == 0) printf("Line solvers complete. Updating global memory...\n");
+        if (i == 0) printf("Line solvers complete. Updating global memory...\n");
 #endif
-    // BEGIN Global memory copy-back
-    if (Ls_shared) {
-        ngline_dev_mutableonly_copy(L_global, L);
-        for (unsigned j = 0; j < L->len; j++) {
-            L_global->data[j] = L->data[j];
+        // BEGIN Global memory copy-back
+        if (Ls_shared) {
+            ngline_dev_mutableonly_copy(L_global, L);
+            for (unsigned j = 0; j < L->len; j++) {
+                L_global->data[j] = L->data[j];
+            }
         }
-    }
-    else {
-        for (unsigned j = 0; j < L->len; j++) {
-            L_data_global[j] = L->data[j];
+        else {
+            for (unsigned j = 0; j < L->len; j++) {
+                L_data_global[j] = L->data[j];
+            }
+            L->data = L_data_global;
         }
-        L->data = L_data_global;
-    }
 #ifdef DEBUG
-if (i == 0) printf("Line solvers updated.\n");
+        if (i == 0) printf("Line solvers updated.\n");
 #endif
-    if (i == 0) {
-        board2d_dev_mutableonly_copy(B_global, B);
-    }
+        if (i == 0) {
+            board2d_dev_mutableonly_copy(B_global, B);
+        }
 #ifdef DEBUG
-if (i == 0) printf("Board updated.\n");
+        if (i == 0) printf("Board updated.\n");
 #endif
-    // END Global memory copy-back
+        // END Global memory copy-back
+    }
 
 }
 #else
@@ -253,6 +276,19 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
         unsigned *B_lock, volatile int *B_status) {
 
     unsigned i = threadIdx.x;
+    bool active = false;
+
+    if (i < MAX_SOLVERS / 2) {
+        if (i < B_global->h) active = true;
+    }
+    else {
+        i = i - MAX_SOLVERS / 2;
+        if (i < B_global->w) {
+            active = true;
+            i += B_global->h;
+        }
+    }
+
 
     NonogramColor H_color;
     if (blockIdx.x == 0) {
@@ -269,50 +305,53 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
     char *smem = (char *) _smem;
     Board2DDevice *B = (Board2DDevice *)(smem + B_dataRM_size + B_dataCM_size + Ls_size);
     NonogramLineDevice *Ls;
-
-    if (Ls_shared) {
-        Ls = (NonogramLineDevice *)(smem + B_dataRM_size + B_dataCM_size);
-    }
-    else {
-        Ls_size = 0;
-        Ls = Ls_global;
-    }
-
-    if (i == 0) {
-        board2d_dev_init_copy(B, B_global);
-        B->data = (NonogramColor *)smem;
-        B->dataCM =(NonogramColor *)(smem + B_dataRM_size);
-        // WARNING DO NOT reference B->solved before updated by all threads!!!
-        B->solved = true;
-    }
-
-
     NonogramLineDevice *L_global;
-    if (Ls_shared) L_global = &Ls_global[i];
-    else L_global = &Ls_original[i];
+    NonogramLineDevice *L;
 
-    NonogramLineDevice *L = &Ls[i];
-    if (Ls_shared) {
-        // Copy Ls;
-        *L = *L_global;
+    if (active) {
+        if (Ls_shared) {
+            Ls = (NonogramLineDevice *)(smem + B_dataRM_size + B_dataCM_size);
+        }
+        else {
+            Ls_size = 0;
+            Ls = Ls_global;
+        }
+
+        if (i == 0) {
+            board2d_dev_init_copy(B, B_global);
+            B->data = (NonogramColor *)smem;
+            B->dataCM =(NonogramColor *)(smem + B_dataRM_size);
+            // WARNING DO NOT reference B->solved before updated by all threads!!!
+            B->solved = true;
+        }
+
+
+        if (Ls_shared) L_global = &Ls_global[i];
+        else L_global = &Ls_original[i];
+
+        L = &Ls[i];
+        if (Ls_shared) {
+            // Copy Ls;
+            *L = *L_global;
+        }
     }
-
     // Need to make sure master finished copying B and the B pointers
     __syncthreads();
 
-    // Update the Ls data pointers
-    if (L->line_is_row) {
-        L->data = board2d_dev_row_ptr_get(B, L->line_index);
-    }
-    else {
-        L->data = board2d_dev_col_ptr_get(B, L->line_index);
-    }
+    if (active) {
+        // Update the Ls data pointers
+        if (L->line_is_row) {
+            L->data = board2d_dev_row_ptr_get(B, L->line_index);
+        }
+        else {
+            L->data = board2d_dev_col_ptr_get(B, L->line_index);
+        }
 
-    // Copy respective board row/col. WARNING DOES NOT RESPECT INTERFACE!!!
-    for (unsigned j = 0; j < L->len; j++) {
-        L->data[j] = L_global->data[j];
+        // Copy respective board row/col. WARNING DOES NOT RESPECT INTERFACE!!!
+        for (unsigned j = 0; j < L->len; j++) {
+            L->data[j] = L_global->data[j];
+        }
     }
-
     __syncthreads();
     // END Shared memory copy.
 
@@ -320,18 +359,22 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
 #ifdef DEBUG
     if (i == 0) printf("Hypothesis: %d in (%d, %d)\n", H_color, X->r_max, X->c_max);
 #endif
+
     HypotheticalBoard H;
-    H.B = B;
-    H.Ls = Ls;
-    if (i == 0) {
-        nghyp_heuristic_update(&H, X, H_color);
-    }
-    else {
-        H.row = X->r_max;
-        H.col = X->c_max;
-        H.guess_color = H_color;
+    if (active) {
+        H.B = B;
+        H.Ls = Ls;
+        if (i == 0) {
+            nghyp_heuristic_update(&H, X, H_color);
+        }
+        else {
+            H.row = X->r_max;
+            H.col = X->c_max;
+            H.guess_color = H_color;
+        }
     }
     __syncthreads();
+
     bool dirty = false;
     do {
 
@@ -339,31 +382,36 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
         // Because of the nature of a solvable Nonogram, it is possible to
         // simultaneously do the rows and columns because they will only ever
         // write correct values.
+        if (active) {
+            if (!L->solved) dirty |= nglinehyp_dev_run_solve(L, B);
+            /*
+            if (L->line_is_row && !L->solved) nglinehyp_dev_run_solve(L, B);
+            __syncthreads();
+            if (!B->valid) {
+                break;
+            }
 
-        if (!L->solved) dirty |= nglinehyp_dev_run_solve(L, B);
-        /*
-        if (L->line_is_row && !L->solved) nglinehyp_dev_run_solve(L, B);
+            if (!L->line_is_row && !L->solved) nglinehyp_dev_run_solve(L, B);
+            */
+        }
         __syncthreads();
+
         if (!B->valid) {
             break;
         }
 
-        if (!L->line_is_row && !L->solved) nglinehyp_dev_run_solve(L, B);
-        */
-
-        __syncthreads();
-        if (!B->valid) {
-            break;
+        if (active) {
+            if (!L->solved) dirty |= nglinehyp_dev_block_solve(L, B);
         }
-
-        if (!L->solved) dirty |= nglinehyp_dev_block_solve(L, B);
 
         dirty = __syncthreads_or(dirty);
 
     } while (dirty && B->valid);
 
-    if (L->line_is_row && !L->solved) B->solved = false;
-    // Now B->solved is valid
+    if (active) {
+        if (L->line_is_row && !L->solved) B->solved = false;
+    }
+        // Now B->solved is valid
 #ifdef DEBUG
     if (i == 0) {
         printf("Solved: %d\t Valid: %d\n", B->solved, B->valid);
@@ -379,98 +427,98 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
 
         if (k == 2) B_global->dirty = false;
     }
+
     __syncthreads();
 
-    if (*B_lock == 1) {
-        // This is the first hypothesis to finish
-        if (!B->valid) {
-            if (i == 0) *B_status = -1;
-        }
-        else if (B->solved) {
-            // We have solved the board. Don't care about the other hypothesis.
-            // Don't care about the lines.
-            if (i == 0) {
-                *B_status = 1;
-                board2d_dev_mutableonly_copy(B_global, B);
+    if (active) {
+        if (*B_lock == 1) {
+            // This is the first hypothesis to finish
+            if (!B->valid) {
+                if (i == 0) *B_status = -1;
             }
-            for (unsigned j = 0; j < L->len; j++) {
-                L_global->data[j] = L->data[j];
+            else if (B->solved) {
+                // We have solved the board. Don't care about the other hypothesis.
+                // Don't care about the lines.
+                if (i == 0) {
+                    *B_status = 1;
+                    board2d_dev_mutableonly_copy(B_global, B);
+                }
+                for (unsigned j = 0; j < L->len; j++) {
+                    L_global->data[j] = L->data[j];
+                }
+            }
+            else {
+                // Dead end. Put assumptions in the board.
+                if (i == 0) *B_status = 0;
+                for (unsigned j = 0; j < L->len; j++) {
+                    nghyp_hyp_assume(L, L_global, B_global, j);
+                }
+            }
+            __threadfence();
+            if (i == 0) {
+                *B_lock = 2;
             }
         }
         else {
-            // Dead end. Put assumptions in the board.
-            if (i == 0) *B_status = 0;
-            for (unsigned j = 0; j < L->len; j++) {
-                nghyp_hyp_assume(L, L_global, B_global, j);
-            }
-        }
-        __threadfence();
-        if (i == 0) {
-            *B_lock = 2;
-        }
-    }
-    else {
 
-#ifdef DEBUG
-        if (i == 0) {
-            if (*B_lock != 2) {
-                printf("Invalid lock value!\n");
-            }
-        }
-#endif
-        if (*B_status == -1) {
-            // The other hypothesis hit a contradiction
-#ifdef DEBUG
+    #ifdef DEBUG
             if (i == 0) {
-                if (!B->valid) printf("Error: Both hypotheses contradict\n");
+                if (*B_lock != 2) {
+                    printf("Invalid lock value!\n");
+                }
             }
-#endif
-            for (unsigned j = 0; j < L->len; j++) {
-                nghyp_confirm_assume(L, L_global, B_global, j);
+    #endif
+            if (*B_status == -1) {
+                // The other hypothesis hit a contradiction
+    #ifdef DEBUG
+                if (i == 0) {
+                    if (!B->valid) printf("Error: Both hypotheses contradict\n");
+                }
+    #endif
+                for (unsigned j = 0; j < L->len; j++) {
+                    nghyp_confirm_assume(L, L_global, B_global, j);
+                }
             }
-            return;
-        }
-        if (*B_status == 1) {
-            // The other hypothesis solved the board already
+            else if (*B_status == 1) {
+                // The other hypothesis solved the board already
 #ifdef DEBUG
-            if (i == 0) {
-                if (B->solved) printf("Error: Both hypotheses solved the board\n");
-            }
+                if (i == 0) {
+                    if (B->solved) printf("Error: Both hypotheses solved the board\n");
+                }
 #endif
-            return;
-        }
+            }
+            else {
 #ifdef DEBUG
-        if (i == 0) {
-            if (*B_status != 0) {
-                printf("Invalid status value!\n");
-            }
-        }
+                if (i == 0) {
+                    if (*B_status != 0) {
+                        printf("Invalid status value!\n");
+                    }
+                }
 #endif
-        if (!B->valid) {
-            for (unsigned j = 0; j < L->len; j++) {
-                nghyp_confirm_unassume(L_global, B_global, j);
+                if (!B->valid) {
+                    for (unsigned j = 0; j < L->len; j++) {
+                        nghyp_confirm_unassume(L_global, B_global, j);
+                    }
+                    nglinehyp_dev_block_solve(L_global, B_global);
+                }
+                else if (B->solved) {
+                    // We have solved the board. Don't care about the other hypothesis.
+                    // Don't care about the lines.
+                    if (i == 0) {
+                        board2d_dev_mutableonly_copy(B_global, B);
+                    }
+                    for (unsigned j = 0; j < L->len; j++) {
+                        L_global->data[j] = L->data[j];
+                    }
+                }
+                else {
+                    // Dead end. Put assumptions in the board.
+                    for (unsigned j = 0; j < L->len; j++) {
+                        nghyp_hyp_unassume(L, L_global, B_global, j);
+                    }
+                    nglinehyp_dev_block_solve(L_global, B_global);
+                }
             }
-            nglinehyp_dev_block_solve(L_global, B_global);
-            return;
-        }
-        else if (B->solved) {
-            // We have solved the board. Don't care about the other hypothesis.
-            // Don't care about the lines.
-            if (i == 0) {
-                board2d_dev_mutableonly_copy(B_global, B);
-            }
-            for (unsigned j = 0; j < L->len; j++) {
-                L_global->data[j] = L->data[j];
-            }
-            return;
-        }
-        else {
-            // Dead end. Put assumptions in the board.
-            for (unsigned j = 0; j < L->len; j++) {
-                nghyp_hyp_unassume(L, L_global, B_global, j);
-            }
-            nglinehyp_dev_block_solve(L_global, B_global);
-            return;
         }
     }
 
@@ -502,7 +550,7 @@ void nghyp_solve_loop_kernel_prep(
 #ifdef DEBUG
         std::cout << "Hypothesis kernel starting..." << std::endl;
 #endif
-        nghyp_solve_loop_kernel<<<2, thread_cnt, smem_size>>>(
+        nghyp_solve_loop_kernel<<<2, MAX_SOLVERS, smem_size>>>(
             Ls_copy, B_global, X,
             Ls_size, B_dataRM_size, B_dataCM_size,
             Ls_shared, Ls_global,
@@ -518,7 +566,7 @@ void nghyp_solve_loop_kernel_prep(
 #ifdef DEBUG
         std::cout << "Lock initialized. Hypothesis kernel starting..." << std::endl;
 #endif
-        nghyp_solve_loop_kernel<<<2, thread_cnt, smem_size>>>(
+        nghyp_solve_loop_kernel<<<2, MAX_SOLVERS, smem_size>>>(
             Ls_global, B_global, X,
             Ls_size, B_dataRM_size, B_dataCM_size,
             Ls_shared, NULL, B_lock, B_status);
@@ -629,7 +677,7 @@ void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
 #ifdef DEBUG
         std::cout << "Launching simple kernel..." << std::endl;
 #endif
-        ng_solve_loop_kernel<<<1, thread_cnt, smem_size>>>(Ls_dev, B_dev, Ls_size, B_dataRM_size, B_dataCM_size, Ls_shared);
+        ng_solve_loop_kernel<<<1, MAX_SOLVERS, smem_size>>>(Ls_dev, B_dev, Ls_size, B_dataRM_size, B_dataCM_size, Ls_shared);
 #ifdef DEBUG
         cudaCheckError(cudaGetLastError());
         cudaDeviceSynchronize();
