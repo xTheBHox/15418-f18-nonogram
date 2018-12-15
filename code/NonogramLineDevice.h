@@ -43,15 +43,15 @@ unsigned dev_min(unsigned a, unsigned b) {
 }
 
 __device__
-void ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
+bool ngline_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
                            NonogramColor color, unsigned i);
 __device__
 void ngline_init_dev(NonogramLineDevice *L);
 
 __device__
-void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B);
+bool ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B);
 __device__
-void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B);
+bool ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B);
 __device__
 void ngline_dev_mutableonly_copy(NonogramLineDevice *L_dst, const NonogramLineDevice *L_src);
 

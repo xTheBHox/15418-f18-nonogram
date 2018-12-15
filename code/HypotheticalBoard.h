@@ -30,9 +30,9 @@ typedef struct {
 } Heuristic;
 
 __device__
-void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B);
+bool nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B);
 __device__
-void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B);
+bool nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B);
 
 __device__
 void nghyp_heuristic_cell(const NonogramLineDevice *Ls, const Board2DDevice *B, Heuristic *X, unsigned r, unsigned c);

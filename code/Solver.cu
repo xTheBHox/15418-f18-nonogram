@@ -87,6 +87,7 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
         const bool Ls_shared) {
 
     unsigned i = threadIdx.x;
+
     // BEGIN Shared memory copy. Need all of Ls and B in shared memory.
     // Get pointers
     extern __shared__ int _smem[];
@@ -156,29 +157,30 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
     if (i == 0) printf("Shared memory initialized. Line solvers starting...\n");
 #endif
 
+    bool dirty = false;
+
     do {
 
-        B->dirty = false;
+        dirty = false;
 
         // Because of the nature of a solvable Nonogram, it is possible to
         // simultaneously do the rows and columns because they will only ever
         // write correct values.
-        if (!L->solved) ngline_dev_run_solve(L, B);
+        if (!L->solved) dirty |= ngline_dev_run_solve(L, B);
         /*
         if (L->line_is_row && !L->solved) ngline_dev_run_solve(L, B);
         __syncthreads();
         if (!L->line_is_row && !L->solved) ngline_dev_run_solve(L, B);
         */
-        __syncthreads();
+        //dirty = __syncthreads_or(dirty);
+        //if (dirty) continue;
 
-        if (B->dirty) continue;
-
-        if (!L->solved) ngline_dev_block_solve(L, B);
+        if (!L->solved) dirty |= ngline_dev_block_solve(L, B);
 
         // TODO remove this too
-        __syncthreads();
+        dirty = __syncthreads_or(dirty);
 
-    } while (B->dirty);
+    } while (dirty);
 
     if (L->line_is_row && !L->solved) B->solved = false;
     // Now B->solved is valid
@@ -330,13 +332,15 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
         H.guess_color = H_color;
     }
     __syncthreads();
+    bool dirty = false;
     do {
-        B->dirty = false;
+
+        dirty = false;
         // Because of the nature of a solvable Nonogram, it is possible to
         // simultaneously do the rows and columns because they will only ever
         // write correct values.
 
-        if (!L->solved) nglinehyp_dev_run_solve(L, B);
+        if (!L->solved) dirty |= nglinehyp_dev_run_solve(L, B);
         /*
         if (L->line_is_row && !L->solved) nglinehyp_dev_run_solve(L, B);
         __syncthreads();
@@ -346,20 +350,17 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
 
         if (!L->line_is_row && !L->solved) nglinehyp_dev_run_solve(L, B);
         */
+
         __syncthreads();
         if (!B->valid) {
             break;
         }
 
-        // TOOD decide whether this is useful
-        // if (B->dirty) continue;
+        if (!L->solved) dirty |= nglinehyp_dev_block_solve(L, B);
 
-        if (!L->solved) nglinehyp_dev_block_solve(L, B);
+        dirty = __syncthreads_or(dirty);
 
-        // TODO remove this too
-        __syncthreads();
-
-    } while (B->dirty && B->valid);
+    } while (dirty && B->valid);
 
     if (L->line_is_row && !L->solved) B->solved = false;
     // Now B->solved is valid
@@ -368,7 +369,6 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
         printf("Solved: %d\t Valid: %d\n", B->solved, B->valid);
     }
 #endif
-    __syncthreads();
 
     if (i == 0) {
         // Try to take the lock
@@ -376,6 +376,8 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
         do {
             k = atomicCAS(B_lock, 0, 1);
         } while (k == 1);
+
+        if (k == 2) B_global->dirty = false;
     }
     __syncthreads();
 
@@ -646,10 +648,13 @@ void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
         std::cout << "Filling heuristic..." << std::endl;
 #endif
         nghyp_heuristic_fill(Ls_dev, B_dev, X_dev, B_host->w, B_host->h);
+#ifdef DEBUG
+            std::cout << "Heuristic initialized." << std::endl;
+#endif
 
         do {
 #ifdef DEBUG
-            std::cout << "Heuristic initialized. Finding maximum..." << std::endl;
+            std::cout << "Finding maximum..." << std::endl;
 #endif
             nghyp_heuristic_max_dev(X_dev, B_host->w * B_host->h);
 

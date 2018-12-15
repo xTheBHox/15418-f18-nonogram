@@ -15,6 +15,8 @@
 #include <ncurses.h>
 #endif
 
+#define MAX_SOLVERS 256
+
 bool ng_init(unsigned w, unsigned h, NonogramLineDevice **Ls, Board2DDevice **B);
 void ng_free(NonogramLineDevice *Ls, Board2DDevice *B);
 bool ng_constr_add(NonogramLineDevice *Ls, unsigned line_index, unsigned constr);

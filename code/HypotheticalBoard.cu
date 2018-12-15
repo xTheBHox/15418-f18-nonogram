@@ -5,18 +5,18 @@
 #include "HypotheticalBoard.h"
 
 __device__ __inline__
-void nglinehyp_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
+bool nglinehyp_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
                            NonogramColor color, unsigned i) {
 
 #ifdef DEBUG
     if (i >= L->len) {
     printf("nglinehyp_dev_cell_solve error: Tried to access index %d from %d line %d",
             i, L->line_is_row, L->line_index);
-        return;
+        return false;
     }
 #endif
 
-    if (L->data[i] == color) return;
+    if (L->data[i] == color) return false;
     if (L->data[i] == NGCOLOR_UNKNOWN) {
         unsigned x, y;
         if (L->line_is_row) {
@@ -32,11 +32,12 @@ void nglinehyp_dev_cell_solve(NonogramLineDevice *L, Board2DDevice *B,
             mvaddch(y, x, ngramColorToChar(ngramColorToHypColor(color)));
             refresh();
         #endif
-        return;
+        return true;
     }
 
     // We have found a contradiction
     B->valid = false;
+    return false;
 
 }
 
@@ -125,25 +126,31 @@ void nglinehyp_dev_run_bot_prop(NonogramLineDevice *L) {
 }
 
 __device__ __inline__
-void nglinehyp_dev_run_fill_black(NonogramLineDevice *L, Board2DDevice *B, const BRun *R, unsigned run_len) {
+bool nglinehyp_dev_run_fill_black(NonogramLineDevice *L, Board2DDevice *B, const BRun *R, unsigned run_len) {
+
+    bool dirty = false;
 
     if (R->topEnd > R->botStart + run_len) {
         B->valid = false;
-        return;
+        return dirty;
     }
     if (R->topEnd == R->botStart + run_len) {
-        if (R->topEnd < L->len) nglinehyp_dev_cell_solve(L, B, NGCOLOR_WHITE, R->topEnd);
-        if (R->botStart > 0) nglinehyp_dev_cell_solve(L, B, NGCOLOR_WHITE, R->botStart - 1);
+        if (R->topEnd < L->len) dirty |= nglinehyp_dev_cell_solve(L, B, NGCOLOR_WHITE, R->topEnd);
+        if (R->botStart > 0) dirty |= nglinehyp_dev_cell_solve(L, B, NGCOLOR_WHITE, R->botStart - 1);
     }
     for (unsigned i = R->botStart; i < R->topEnd; i++) {
-        nglinehyp_dev_cell_solve(L, B, NGCOLOR_BLACK, i);
+        dirty |= nglinehyp_dev_cell_solve(L, B, NGCOLOR_BLACK, i);
     }
+
+    return dirty;
 
 }
 
 __device__ __inline__
-void nglinehyp_dev_run_fill_white(NonogramLineDevice *L, Board2DDevice *B, unsigned ri) {
+bool nglinehyp_dev_run_fill_white(NonogramLineDevice *L, Board2DDevice *B, unsigned ri) {
 // ri is the index of the black run after the white area
+    bool dirty = false;
+
     unsigned prevBotEnd;
     unsigned topStart;
     if (ri == 0) {
@@ -160,25 +167,27 @@ void nglinehyp_dev_run_fill_white(NonogramLineDevice *L, Board2DDevice *B, unsig
     }
 
     for (unsigned i = prevBotEnd; i < topStart; i++) {
-        nglinehyp_dev_cell_solve(L, B, NGCOLOR_WHITE, i);
+        dirty |= nglinehyp_dev_cell_solve(L, B, NGCOLOR_WHITE, i);
     }
+
+    return dirty;
 
 }
 
 __device__
-void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B) {
+bool nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B) {
 
-
+    bool dirty = false;
     unsigned line_len = L->len;
 
     // Adjust the possible start and end points of the runs
 
     for (unsigned ri = 0; ri < L->constr_len; ri++) {
         while(nglinehyp_dev_run_top_adjust(L, B, L->b_runs[ri].topEnd, line_len, L->constr[ri])) {
-            if (!B->valid) return;
+            if (!B->valid) return dirty;
         }
         while(nglinehyp_dev_run_bot_adjust(L, B, L->b_runs[ri].botStart, line_len, L->constr[ri])) {
-            if (!B->valid) return;
+            if (!B->valid) return dirty;
         }
     }
 
@@ -188,20 +197,21 @@ void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B) {
 
     for (unsigned ri = 0; ri < L->constr_len; ri++) {
         // Add the padding to the front of each run
-        nglinehyp_dev_run_fill_white(L, B, ri);
-        if (!B->valid) return;
+        dirty |= nglinehyp_dev_run_fill_white(L, B, ri);
+        if (!B->valid) return dirty;
         // Fill overlaps
-        nglinehyp_dev_run_fill_black(L, B, &L->b_runs[ri], L->constr[ri]);
-        if (!B->valid) return;
+        dirty |= nglinehyp_dev_run_fill_black(L, B, &L->b_runs[ri], L->constr[ri]);
+        if (!B->valid) return dirty;
     }
     // Add the white at the end of the line
-    nglinehyp_dev_run_fill_white(L, B, L->constr_len);
+    dirty |= nglinehyp_dev_run_fill_white(L, B, L->constr_len);
 
+    return dirty;
 
 }
 
 __device__
-void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
+bool nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
 
     unsigned block_topStart = 0;
     unsigned block_start;
@@ -212,6 +222,7 @@ void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
     unsigned i = 0;
 
     bool solved = true;
+    bool dirty = false;
 
     while (i < L->len) {
 
@@ -261,7 +272,7 @@ void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
                     // Make the topmost possible run start no later than this run
                     if (L->b_runs[ri_last].botStart > block_start) {
                         L->b_runs[ri_last].botStart = block_start;
-                        B->dirty = true;
+                        dirty = true;
                     }
                     run_len_min = run_len;
                     run_len_max = run_len;
@@ -278,35 +289,36 @@ void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B) {
 
         if (run_fit_count == 0) {
             B->valid = false;
-            return;
+            return dirty;
         }
 
         // Make the bottommost possible run start no earlier than this run
         if (L->b_runs[run_fit_index].topEnd < block_end){
             L->b_runs[run_fit_index].topEnd = block_end;
-            B->dirty = true;
+            dirty = true;
         }
 
         while (block_end < block_topStart + run_len_min) {
             // If the minimum run length puts the last cell in the shortest possible run further right
             // than the last cell in the block, fill up in between.
-            nglinehyp_dev_cell_solve(L, B, NGCOLOR_BLACK, block_end);
+            dirty |= nglinehyp_dev_cell_solve(L, B, NGCOLOR_BLACK, block_end);
             block_end++;
         }
         while (block_start > block_botEnd - run_len_min) {
             // If the minimum run length puts the first cell in the shortest possible run further left
             // than the first cell in the block, fill up in between.
             block_start--;
-            nglinehyp_dev_cell_solve(L, B, NGCOLOR_BLACK, block_start);
+            dirty |= nglinehyp_dev_cell_solve(L, B, NGCOLOR_BLACK, block_start);
         }
         if (block_len_min == run_len_max) {
             // If the block is already the maximum run length, then fill up white around it.
-            if (block_end != L->len) nglinehyp_dev_cell_solve(L, B, NGCOLOR_WHITE, block_end);
-            if (block_start != 0) nglinehyp_dev_cell_solve(L, B, NGCOLOR_WHITE, block_start - 1);
+            if (block_end != L->len) dirty |= nglinehyp_dev_cell_solve(L, B, NGCOLOR_WHITE, block_end);
+            if (block_start != 0) dirty |= nglinehyp_dev_cell_solve(L, B, NGCOLOR_WHITE, block_start - 1);
         }
     }
 
     if (solved) L->solved = true;
+    return dirty;
 
 }
 

@@ -74,7 +74,7 @@ NonogramColor *board2d_host_col_ptr_get(const Board2DDevice *B, unsigned index) 
     void board2d_dev_elem_set(Board2DDevice *B, unsigned x, unsigned y, NonogramColor val) {
         B->data[y * B->pitchRM + x] = val;
         B->dataCM[x * B->pitchCM + y] = val;
-        B->dirty = true;
+        // B->dirty = true;
     }
 
     __device__ __inline__
