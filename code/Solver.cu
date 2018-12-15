@@ -83,18 +83,19 @@ bool ng_constr_add(NonogramLineDevice *Ls, unsigned line_index, unsigned constr)
 #ifdef __NVCC__
 __global__ void
 ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
-        unsigned Ls_size, const unsigned B_data_size, const bool Ls_shared) {
+        unsigned Ls_size, const unsigned B_dataRM_size, const unsigned B_dataCM_size,
+        const bool Ls_shared) {
 
     unsigned i = threadIdx.x;
     // BEGIN Shared memory copy. Need all of Ls and B in shared memory.
     // Get pointers
     extern __shared__ int _smem[];
     char *smem = (char *) _smem;
-    Board2DDevice *B = (Board2DDevice *)smem;
+    Board2DDevice *B = (Board2DDevice *)(smem + B_dataRM_size + B_dataCM_size + Ls_size);
     NonogramLineDevice *Ls;
 
     if (Ls_shared) {
-        Ls = (NonogramLineDevice *)(smem + sizeof(Board2DDevice));
+        Ls = (NonogramLineDevice *)(smem +  B_dataRM_size + B_dataCM_size);
     }
     else {
         Ls_size = 0;
@@ -103,8 +104,8 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
 
     if (i == 0) {
         board2d_dev_init_copy(B, B_global);
-        B->data = (NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size);
-        B->dataCM =(NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size + B_data_size / 2);
+        B->data = (NonogramColor *)smem;
+        B->dataCM =(NonogramColor *)(smem + B_dataRM_size);
         // WARNING DO NOT reference B->solved before updated by all threads!!!
         B->solved = true;
     }
@@ -162,7 +163,9 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
         // Because of the nature of a solvable Nonogram, it is possible to
         // simultaneously do the rows and columns because they will only ever
         // write correct values.
-        if (!L->solved) ngline_dev_run_solve(L, B);
+        if (L->line_is_row && !L->solved) ngline_dev_run_solve(L, B);
+        __syncthreads();
+        if (!L->line_is_row && !L->solved) ngline_dev_run_solve(L, B);
         __syncthreads();
 
         if (B->dirty) continue;
@@ -240,8 +243,8 @@ bool ng_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 #ifdef __NVCC__
 __global__
 void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global, Heuristic *X,
-        unsigned Ls_size, const unsigned B_data_size, const bool Ls_shared,
-        NonogramLineDevice *Ls_original,
+        unsigned Ls_size, const unsigned B_dataRM_size, const unsigned B_dataCM_size,
+        const bool Ls_shared, NonogramLineDevice *Ls_original,
         unsigned *B_lock, volatile int *B_status) {
 
     unsigned i = threadIdx.x;
@@ -259,11 +262,11 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
     // Get pointers
     extern __shared__ int _smem[];
     char *smem = (char *) _smem;
-    Board2DDevice *B = (Board2DDevice *)smem;
+    Board2DDevice *B = (Board2DDevice *)(smem + B_dataRM_size + B_dataCM_size + Ls_size);
     NonogramLineDevice *Ls;
 
     if (Ls_shared) {
-        Ls = (NonogramLineDevice *)(smem + sizeof(Board2DDevice));
+        Ls = (NonogramLineDevice *)(smem + B_dataRM_size + B_dataCM_size);
     }
     else {
         Ls_size = 0;
@@ -272,8 +275,8 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
 
     if (i == 0) {
         board2d_dev_init_copy(B, B_global);
-        B->data = (NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size);
-        B->dataCM =(NonogramColor *)(smem + sizeof(Board2DDevice) + Ls_size + B_data_size / 2);
+        B->data = (NonogramColor *)smem;
+        B->dataCM =(NonogramColor *)(smem + B_dataRM_size);
         // WARNING DO NOT reference B->solved before updated by all threads!!!
         B->solved = true;
     }
@@ -323,15 +326,23 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
         H.col = X->c_max;
         H.guess_color = H_color;
     }
-
+    __syncthreads();
     do {
         B->dirty = false;
+        /*
         // Because of the nature of a solvable Nonogram, it is possible to
         // simultaneously do the rows and columns because they will only ever
         // write correct values.
 
         if (!L->solved) nglinehyp_dev_run_solve(L, B);
+        */
+        if (L->line_is_row && !L->solved) nglinehyp_dev_run_solve(L, B);
+        __syncthreads();
+        if (!B->valid) {
+            break;
+        }
 
+        if (!L->line_is_row && !L->solved) nglinehyp_dev_run_solve(L, B);
         __syncthreads();
         if (!B->valid) {
             break;
@@ -354,6 +365,7 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
         printf("Solved: %d\t Valid: %d\n", B->solved, B->valid);
     }
 #endif
+    __syncthreads();
 
     if (i == 0) {
         // Try to take the lock
@@ -460,7 +472,8 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
 }
 void nghyp_solve_loop_kernel_prep(
         NonogramLineDevice *Ls_global, Board2DDevice *B_global, Heuristic *X, const unsigned thread_cnt,
-        const unsigned smem_size, const unsigned Ls_size, const unsigned B_data_size,
+        const unsigned smem_size, const unsigned Ls_size,
+        const unsigned B_dataRM_size, const unsigned B_dataCM_size,
         const bool Ls_shared) {
 
 #ifdef DEBUG
@@ -486,8 +499,9 @@ void nghyp_solve_loop_kernel_prep(
 #endif
         nghyp_solve_loop_kernel<<<2, thread_cnt, smem_size>>>(
             Ls_copy, B_global, X,
-            Ls_size, B_data_size, Ls_shared,
-            Ls_global, B_lock, B_status);
+            Ls_size, B_dataRM_size, B_dataCM_size,
+            Ls_shared, Ls_global,
+            B_lock, B_status);
 #ifdef DEBUG
         cudaCheckError(cudaGetLastError());
         cudaDeviceSynchronize();
@@ -501,8 +515,8 @@ void nghyp_solve_loop_kernel_prep(
 #endif
         nghyp_solve_loop_kernel<<<2, thread_cnt, smem_size>>>(
             Ls_global, B_global, X,
-            Ls_size, B_data_size, Ls_shared,
-            NULL, B_lock, B_status);
+            Ls_size, B_dataRM_size, B_dataCM_size,
+            Ls_shared, NULL, B_lock, B_status);
 #ifdef DEBUG
         cudaCheckError(cudaGetLastError());
         cudaDeviceSynchronize();
@@ -556,25 +570,12 @@ bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
 void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
 
     unsigned thread_cnt = B_host->w + B_host->h;
-    unsigned B_data_size = 2 * B_host->w * B_host->h * sizeof(NonogramColor);
-    unsigned Ls_size = thread_cnt * sizeof(NonogramLineDevice);
-    unsigned smem_size = Ls_size + B_data_size + sizeof(Board2DDevice);
-    bool Ls_shared = true;
-
-    if (2 * smem_size > 48 * 1024) {
-        smem_size = B_data_size + sizeof(Board2DDevice);
-        Ls_shared = false;
-    }
 
     NonogramLineDevice *Ls_dev;
     Board2DDevice *B_dev;
 
     // Move structures to device memory
-
 #ifdef DEBUG
-    std::cout << "B_data_size: " << B_data_size << std::endl;
-    std::cout << "Ls_size: " << Ls_size << std::endl;
-    std::cout << "smem_size: " << smem_size << std::endl;
     std::cout << "Line array initializing..." << std::endl;
 #endif
     Ls_dev = ng_linearr_init_dev(B_host->w, B_host->h, Ls_host);
@@ -584,7 +585,23 @@ void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
 #endif
     B_dev = board2d_init_dev(B_host);
 
-    // Initialize the runs
+    unsigned B_dataRM_size = sizeof(NonogramColor) * B_host->h * B_host->pitchRM;
+    unsigned B_dataCM_size = sizeof(NonogramColor) * B_host->w * B_host->pitchCM;
+    unsigned B_data_size = B_dataRM_size + B_dataCM_size;
+    unsigned Ls_size = thread_cnt * sizeof(NonogramLineDevice);
+    unsigned smem_size = Ls_size + B_data_size + sizeof(Board2DDevice);
+    bool Ls_shared = true;
+
+    if (2 * smem_size > 48 * 1024) {
+        smem_size = B_data_size + sizeof(Board2DDevice);
+        Ls_shared = false;
+    }
+
+#ifdef DEBUG
+    std::cout << "B_data_size: " << B_data_size << std::endl;
+    std::cout << "Ls_size: " << Ls_size << std::endl;
+    std::cout << "smem_size: " << smem_size << std::endl;
+#endif
 
 #ifdef DEBUG
     std::cout << "Lines initializing..." << std::endl;
@@ -592,6 +609,7 @@ void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
 
     TIMER_START(solve_loop);
 
+    // Initialize the runs
     ngline_init_kernel<<<1, thread_cnt>>>(B_dev, Ls_dev);
 #ifdef DEBUG
     cudaCheckError(cudaGetLastError());
@@ -606,7 +624,7 @@ void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
 #ifdef DEBUG
         std::cout << "Launching simple kernel..." << std::endl;
 #endif
-        ng_solve_loop_kernel<<<1, thread_cnt, smem_size>>>(Ls_dev, B_dev, Ls_size, B_data_size, Ls_shared);
+        ng_solve_loop_kernel<<<1, thread_cnt, smem_size>>>(Ls_dev, B_dev, Ls_size, B_dataRM_size, B_dataCM_size, Ls_shared);
 #ifdef DEBUG
         cudaCheckError(cudaGetLastError());
         cudaDeviceSynchronize();
@@ -636,7 +654,7 @@ void ng_solve_par(NonogramLineDevice *Ls_host, Board2DDevice *B_host) {
             std::cout << "Cell selected. Preparing hypothesis kernel..." << std::endl;
 #endif
             nghyp_solve_loop_kernel_prep(Ls_dev, B_dev, X_dev, thread_cnt,
-                    smem_size, Ls_size, B_data_size, Ls_shared);
+                    smem_size, Ls_size, B_dataRM_size, B_dataCM_size, Ls_shared);
             cudaCheckError(cudaMemcpy(&solved, &B_dev->solved, sizeof(bool), cudaMemcpyDeviceToHost));
             cudaCheckError(cudaMemcpy(&dirty, &B_dev->dirty, sizeof(bool), cudaMemcpyDeviceToHost));
 
@@ -713,7 +731,7 @@ void ng_solve_seq(NonogramLineDevice **pLs_dev, Board2DDevice **pB_dev) {
                 break;
             } else {
                 // Check for contradiction
-                if (!nghyp_valid_check(&H_b, B_dev)) {
+                if (!nghyp_host_valid_check(&H_b, B_dev)) {
                     nghyp_free(H_b);
                     break;
                 }
@@ -738,14 +756,14 @@ void ng_solve_seq(NonogramLineDevice **pLs_dev, Board2DDevice **pB_dev) {
                 break;
             } else {
                 // Check for contradiction
-                if (!nghyp_valid_check(&H_w, B_dev)) {
+                if (!nghyp_host_valid_check(&H_w, B_dev)) {
                     nghyp_free(H_b);
                     nghyp_free(H_w);
                     break;
                 }
             }
             // Check for duplicates if not solved
-            nghyp_common_set(&H_b, &H_w, B_dev);
+            nghyp_host_common_set(&H_b, &H_w, B_dev);
             nghyp_free(H_b);
             nghyp_free(H_w);
 

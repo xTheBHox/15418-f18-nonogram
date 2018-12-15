@@ -168,9 +168,6 @@ void nglinehyp_dev_run_fill_white(NonogramLineDevice *L, Board2DDevice *B, unsig
 __device__
 void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B) {
 
-#ifdef DEBUG
-    if (run_index >= L->constr_len) return;
-#endif
 
     unsigned line_len = L->len;
 
@@ -197,7 +194,7 @@ void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B) {
         nglinehyp_dev_run_fill_black(L, B, &L->b_runs[ri], L->constr[ri]);
         if (!B->valid) return;
     }
-    // Add the padding at the end of the line
+    // Add the white at the end of the line
     nglinehyp_dev_run_fill_white(L, B, L->constr_len);
 
 
@@ -651,19 +648,19 @@ void nghyp_hyp_confirm(HypotheticalBoard *H, Board2DDevice **B, NonogramLineDevi
  * @param B
  * @return
  */
-bool nghyp_valid_check(HypotheticalBoard *H, Board2DDevice *B) {
+bool nghyp_host_valid_check(HypotheticalBoard *H, Board2DDevice *B) {
 
     if (H->B->valid) return true;
 
 #ifdef DEBUG
-    if (board2d_dev_elem_get_rm(B, H->col, H->row) != NGCOLOR_UNKNOWN) {
+    if (board2d_host_elem_get_rm(B, H->col, H->row) != NGCOLOR_UNKNOWN) {
         fprintf(stderr, "Hypothesis is a conflict\n");
         return false;
     }
 #endif
 
     if (H->guess_color == NGCOLOR_BLACK) {
-        board2d_dev_elem_set(B, H->col, H->row, NGCOLOR_WHITE);
+        board2d_host_elem_set(B, H->col, H->row, NGCOLOR_WHITE);
 
 #ifdef DISP
         mvaddch(H->row, H->col, ngramColorToChar(NGCOLOR_WHITE));
@@ -671,7 +668,7 @@ bool nghyp_valid_check(HypotheticalBoard *H, Board2DDevice *B) {
 #endif
     }
     else if (H->guess_color == NGCOLOR_WHITE) {
-        board2d_dev_elem_set(B, H->col, H->row, NGCOLOR_BLACK);
+        board2d_host_elem_set(B, H->col, H->row, NGCOLOR_BLACK);
 
 #ifdef DISP
         mvaddch(H->row, H->col, ngramColorToChar(NGCOLOR_BLACK));
@@ -683,15 +680,15 @@ bool nghyp_valid_check(HypotheticalBoard *H, Board2DDevice *B) {
 
 }
 
-void nghyp_common_set(HypotheticalBoard *H1, HypotheticalBoard *H2, Board2DDevice *B) {
+void nghyp_host_common_set(HypotheticalBoard *H1, HypotheticalBoard *H2, Board2DDevice *B) {
 
     for (unsigned r = 0; r < B->h; r++) {
         for (unsigned c = 0; c < B->w; c++) {
-            if (board2d_dev_elem_get_rm(B, c, r) == NGCOLOR_UNKNOWN) {
-                NonogramColor color = board2d_dev_elem_get_rm(H1->B, c, r);
+            if (board2d_host_elem_get_rm(B, c, r) == NGCOLOR_UNKNOWN) {
+                NonogramColor color = board2d_host_elem_get_rm(H1->B, c, r);
                 if (color != NGCOLOR_UNKNOWN &&
-                    color == board2d_dev_elem_get_rm(H2->B, c, r)) {
-                    board2d_dev_elem_set(B, c, r, color);
+                    color == board2d_host_elem_get_rm(H2->B, c, r)) {
+                    board2d_host_elem_set(B, c, r, color);
 #ifdef DISP
                     mvaddch(r, c, ngramColorToChar(color));
 #endif

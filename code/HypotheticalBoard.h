@@ -51,7 +51,8 @@ void nghyp_heuristic_max_dev(Heuristic *X, unsigned X_data_len);
 HypotheticalBoard nghyp_init(NonogramLineDevice *Ls, Board2DDevice *B);
 void nghyp_free(HypotheticalBoard H);
 void nghyp_hyp_confirm(HypotheticalBoard *H, Board2DDevice **B, NonogramLineDevice **Ls);
-bool nghyp_valid_check(HypotheticalBoard *H, Board2DDevice *B);
+bool nghyp_host_valid_check(HypotheticalBoard *H, Board2DDevice *B);
+void nghyp_host_common_set(HypotheticalBoard *H1, HypotheticalBoard *H2, Board2DDevice *B);
 
 __device__ __inline__
 void nghyp_hyp_assume(NonogramLineDevice *L_hyp, const NonogramLineDevice *L_global, Board2DDevice *B_global, unsigned i) {
@@ -124,8 +125,6 @@ void nghyp_confirm_unassume(const NonogramLineDevice *L_global, Board2DDevice *B
     }
 
 }
-
-void nghyp_common_set(HypotheticalBoard *H1, HypotheticalBoard *H2, Board2DDevice *B);
 
 
 #endif //CODE_HYPOTHETICALBOARD_H

@@ -170,9 +170,6 @@ void ngline_dev_run_fill_white(NonogramLineDevice *L, Board2DDevice *B, unsigned
 __device__
 void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B) {
 
-#ifdef DEBUG
-    if (run_index >= L->constr_len) return;
-#endif
 
     unsigned line_len = L->len;
 
@@ -401,11 +398,11 @@ NonogramLineDevice *ng_linearr_deepcopy_dev_double(NonogramLineDevice *Ls, unsig
 void ng_linearr_board_change(NonogramLineDevice *Ls, Board2DDevice *B) {
 
     for (unsigned i = 0; i < B->h; i++) {
-        Ls[i].data = board2d_dev_row_ptr_get(B, i);
+        Ls[i].data = board2d_host_row_ptr_get(B, i);
     }
 
     for (unsigned i = 0; i < B->w; i++) {
-        Ls[i + B->h].data = board2d_dev_col_ptr_get(B, i);
+        Ls[i + B->h].data = board2d_host_col_ptr_get(B, i);
     }
 
 }

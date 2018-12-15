@@ -6,7 +6,7 @@ EXECPAR=ngram-par
 EXECSEQ=ngram-seq
 CXX=g++ -m64
 CXXFLAGS=-Wall -O3 -std=c++11 -D PERF
-DBGFLAGS= -D DEBUG  -g
+DBGFLAGS= -D DEBUG -g
 NVCC=nvcc -m64
 NVCCFLAGS=-O3 -std=c++11 -D PERF --gpu-architecture compute_61 --gpu-code sm_61
 NVCCDBGFLAGS=$(DBGFLAGS) -G
