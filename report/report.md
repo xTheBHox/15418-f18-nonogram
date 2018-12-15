@@ -132,3 +132,35 @@ When both guesses of lookahead solving reach an unknown state (no contradiction)
 In cases when there are no common cells and no progress can be made on either guess (black or white), then there are two options: either make a second guess from the states created by the first guess, or cancel the first guess and make a different guess. Because making further guesses (going depth-first) requires a lot of memory to track state and we are limited on GPU shared memory, we opt to use breath-first instead. First, this allows the heuristic previously computed to be reused after discounting the cell used in the first guess.
 
 Also, when solving with a guessed cell (a hypothetical state), a single thread block is used. The hypothetical board is kept only in the block's shared memory, and eventually, only modified cells are eventually written back to the master board in global memory if necessary. In case of a contradiction, the shared memory can simply be discarded. This helps to reduce data transfer to and from the GPU.
+
+# Results
+
+Because of the nature of human-friendly nonograms, even the hardest nonograms on webpbn.com were solved in less than 1 second on our solver. As a result, this severely limited any parallel speedup we could achieve.
+
+## Memory
+
+One of the main limiting factors was memory latency. While we minimized the transfer of data as much as possible during the solving process (transfer before and after solving was excluded from the timings), it was still necessary to transfer data between device global memory and shared memory. For the simple boards that could be solved by pure line solving, this transfer only happened once, however, the solving was also quickly finished, so the overhead of data transfer was significant.
+
+On larger boards, every time a guess was made, new kernels were launched, with the need to copy to shared memory again (the need to copy back depended on whether a contradiction was reached). Sometimes these kernels were very transient for a bad guess when no progress was made, which wasted the data transfer.
+
+One of the attempted optimizations was to set the board pitch to a power of 2 to reduce bank conflicts. However, instead of reducing time taken, this slightly increased time taken. The only likely reason for this is that the additional memory allocation required caused a slowdown. This is evidenced by the much large increase in computation time for #1739 when going from unpitched to pitched, due to the column width being 67 (just above 64) which would result in a pitch of 128 for the column-major array. Compare this to #1837, #3541 and #7604 which are all just under 64 in both dimensions, and the difference in their computation time between pitched and unpitched is significantly smaller. Using NVVP (the NVIDIA Visual Profiler) also suggested that cudaMalloc was eating up a large amount of time.
+
+The amount of data being transferred was very small compared to typical transfers for a GPU. NVVP reported only a 17% memory transfer efficiency on #1739. This is hard to address since nonograms are small. Data transfer was already limited as much as possible even between shared and global device memory and global device and host memory, but often it was still necessary to set flags to tell the CPU about the results of the kernel to make decisions about what to do next. These small (but necessary) data transfers would have incurred a large overhead.
+
+Finally, due to extremely limited shared memory (48KB), only two boards can fit in shared memory at the same time. This meant that for lookahead solving, it was not possible to make more than two guesses (both on the same cell) and run in parallel without having to use global memory. Using global memory was not desirable since a copy of the board would have to be made, which would mean allocation, data transfer and eventually freeing the memory, incurring more overhead.
+
+## Divergence
+
+Another major problem was divergent execution. In order to solve efficiently, it was necessary to condition on the state of each line at many points, and every line was in a different state. Some lines would be solved and some would not, and some lines would have many constraints and some would have only a few. NVVP shows a warp execution efficiency average of 25% on #1739.
+
+One of the optimizations in this area was to split the row and columns solvers into different warps. This would have helped during line traversal, since there were a different number of cells in the rows and the columns. This was done by creating some dummy threads that remained idle during the kernel, participating only in synchronization. As can be seen from the data, this significantly reduced computation time on the simpler boards, suggesting that a large part of the computation time on the simple solving is a result of divergent execution.
+
+Reducing synchronization points within each kernel affected running time significantly. The algorithm used involves solving from the perspective of the run constraints and then from the perspective of the blocks already on board. Removing the synchronization between these two phases, which allows them to run concurrently, as well as the synchronization between the column and row phases, provided a 10% reduction in computation time on #1739. This was despite the possibility of requiring more iterations to arrive at the solved state or a dead end.
+
+## Potential improvements
+
+Using a sparse matrix data structure for the hypothetical board, storing only changed cells, may help since there will not be a need to duplicate the master board to work on it. However, this will likely not work well on a GPU since there will be a lot of synchronization required with such a data structure.
+
+It is possible that a different, more expensive heuristic not suited for sequential execution could work better on a GPU to reduce the number of guesses required. However, since execution time is already so short, it is unlikely to be significantly faster than the current system with the current heuristic.
+
+Consider using a CPU with a large number of cores, such as a Xeon Phi, which will handle divergent execution better. Nonetheless, data sharing especially for the board will be slower on such a device, which will affect the speedup that can be obtained.
