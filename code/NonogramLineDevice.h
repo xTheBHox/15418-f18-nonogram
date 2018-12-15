@@ -49,7 +49,7 @@ __device__
 void ngline_init_dev(NonogramLineDevice *L);
 
 __device__
-void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned run_index);
+void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B);
 __device__
 void ngline_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B);
 __device__

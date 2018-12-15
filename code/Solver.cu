@@ -163,13 +163,7 @@ ng_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_global,
         // Because of the nature of a solvable Nonogram, it is possible to
         // simultaneously do the rows and columns because they will only ever
         // write correct values.
-        if (!L->solved) {
-            for (unsigned ri = 0; ri < L->constr_len; ri++) {
-                ngline_dev_run_solve(L, B, ri);
-            }
-        }
-
-        // TODO remove this too
+        if (!L->solved) ngline_dev_run_solve(L, B);
         __syncthreads();
 
         if (B->dirty) continue;
@@ -220,9 +214,7 @@ bool ng_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
         for (unsigned i = 0; i < B->h + B->w; i++) {
             NonogramLineDevice *L = &Ls[i];
             if (L->solved) continue;
-            for (unsigned ri = 0; ri < L->constr_len; ri++) {
-                ngline_dev_run_solve(L, B, ri);
-            }
+            ngline_dev_run_solve(L, B);
         }
 
         if (B->dirty) continue;
@@ -338,12 +330,9 @@ void nghyp_solve_loop_kernel(NonogramLineDevice *Ls_global, Board2DDevice *B_glo
         // Because of the nature of a solvable Nonogram, it is possible to
         // simultaneously do the rows and columns because they will only ever
         // write correct values.
-        if (!L->solved) {
-            for (unsigned ri = 0; ri < L->constr_len; ri++) {
-                nglinehyp_dev_run_solve(L, B, ri);
-            }
-        }
-        // TODO remove this too
+
+        if (!L->solved) nglinehyp_dev_run_solve(L, B);
+
         __syncthreads();
         if (!B->valid) {
             break;
@@ -542,10 +531,9 @@ bool nghyp_solve_loop(NonogramLineDevice *Ls, Board2DDevice *B) {
         for (unsigned i = 0; i < B->h + B->w; i++) {
             NonogramLineDevice *L = &Ls[i];
             if (L->solved) continue;
-            for (unsigned ri = 0; ri < L->constr_len; ri++) {
-                nglinehyp_dev_run_solve(L, B, ri);
-                if (!B->valid) return false;
-            }
+            nglinehyp_dev_run_solve(L, B);
+            if (!B->valid) return false;
+
         }
 
         for (unsigned i = 0; i < B->h + B->w; i++) {

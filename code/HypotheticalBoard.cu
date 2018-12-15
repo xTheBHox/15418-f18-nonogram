@@ -166,40 +166,40 @@ void nglinehyp_dev_run_fill_white(NonogramLineDevice *L, Board2DDevice *B, unsig
 }
 
 __device__
-void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned run_index) {
+void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B) {
 
 #ifdef DEBUG
     if (run_index >= L->constr_len) return;
 #endif
 
-    BRun *R = &L->b_runs[run_index];
-    unsigned run_len = L->constr[run_index];
     unsigned line_len = L->len;
 
     // Adjust the possible start and end points of the runs
 
-    while(nglinehyp_dev_run_top_adjust(L, B, R->topEnd, line_len, run_len)) {
-        if (!B->valid) return;
-    }
-    while(nglinehyp_dev_run_bot_adjust(L, B, R->botStart, line_len, run_len)) {
-        if (!B->valid) return;
+    for (unsigned ri = 0; ri < L->constr_len; ri++) {
+        while(nglinehyp_dev_run_top_adjust(L, B, L->b_runs[ri].topEnd, line_len, L->constr[ri])) {
+            if (!B->valid) return;
+        }
+        while(nglinehyp_dev_run_bot_adjust(L, B, L->b_runs[ri].botStart, line_len, L->constr[ri])) {
+            if (!B->valid) return;
+        }
     }
 
     // Propagate changes - one thread only!
-
     nglinehyp_dev_run_top_prop(L);
     nglinehyp_dev_run_bot_prop(L);
 
-    // Fill overlaps
-    nglinehyp_dev_run_fill_black(L, B, R, run_len);
-    if (!B->valid) return;
-
-    // Add the padding to the front of each run
-    nglinehyp_dev_run_fill_white(L, B, run_index);
-    if (!B->valid) return;
-
+    for (unsigned ri = 0; ri < L->constr_len; ri++) {
+        // Add the padding to the front of each run
+        nglinehyp_dev_run_fill_white(L, B, ri);
+        if (!B->valid) return;
+        // Fill overlaps
+        nglinehyp_dev_run_fill_black(L, B, &L->b_runs[ri], L->constr[ri]);
+        if (!B->valid) return;
+    }
     // Add the padding at the end of the line
-    if (run_index == L->constr_len - 1) nglinehyp_dev_run_fill_white(L, B, L->constr_len);
+    nglinehyp_dev_run_fill_white(L, B, L->constr_len);
+
 
 }
 

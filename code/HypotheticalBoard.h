@@ -30,7 +30,7 @@ typedef struct {
 } Heuristic;
 
 __device__
-void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned run_index);
+void nglinehyp_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B);
 __device__
 void nglinehyp_dev_block_solve(NonogramLineDevice *L, Board2DDevice *B);
 
@@ -69,7 +69,7 @@ void nghyp_hyp_assume(NonogramLineDevice *L_hyp, const NonogramLineDevice *L_glo
         default: return;
         }
     }
-    
+
 }
 
 __device__ __inline__
@@ -95,7 +95,7 @@ void nghyp_hyp_unassume(NonogramLineDevice *L_hyp, const NonogramLineDevice *L_g
         }
         return;
     }
-    
+
 }
 
 __device__ __inline__
@@ -105,7 +105,7 @@ void nghyp_confirm_assume(NonogramLineDevice *L_hyp, const NonogramLineDevice *L
        L_global->data[i] = L_hyp->data[i];
        B_global->dirty = true;
     }
-    
+
 }
 
 __device__ __inline__
@@ -119,10 +119,10 @@ void nghyp_confirm_unassume(const NonogramLineDevice *L_global, Board2DDevice *B
         case NGCOLOR_HYP_BLACK:
             L_global->data[i] = NGCOLOR_BLACK;
             B_global->dirty = true;
-        
+
         default: return;
     }
-    
+
 }
 
 void nghyp_common_set(HypotheticalBoard *H1, HypotheticalBoard *H2, Board2DDevice *B);

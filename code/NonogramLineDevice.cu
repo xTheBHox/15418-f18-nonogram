@@ -168,31 +168,31 @@ void ngline_dev_run_fill_white(NonogramLineDevice *L, Board2DDevice *B, unsigned
 }
 
 __device__
-void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B, unsigned run_index) {
+void ngline_dev_run_solve(NonogramLineDevice *L, Board2DDevice *B) {
 
 #ifdef DEBUG
     if (run_index >= L->constr_len) return;
 #endif
 
-    BRun *R = &L->b_runs[run_index];
-    unsigned run_len = L->constr[run_index];
     unsigned line_len = L->len;
 
     // Adjust the possible start and end points of the runs
 
-    while(ngline_dev_run_top_adjust(L, R->topEnd, line_len, run_len));
-    while(ngline_dev_run_bot_adjust(L, R->botStart, line_len, run_len));
-
+    for (unsigned ri = 0; ri < L->constr_len; ri++) {
+        while(ngline_dev_run_top_adjust(L, L->b_runs[ri].topEnd, line_len, L->constr[ri]));
+        while(ngline_dev_run_bot_adjust(L, L->b_runs[ri].botStart, line_len, L->constr[ri]));
+    }
     // Propagate changes - one thread only!
 
     ngline_dev_run_top_prop(L);
     ngline_dev_run_bot_prop(L);
 
     // Fill overlaps
-
-    ngline_dev_run_fill_black(L, B, R, run_len);
-    ngline_dev_run_fill_white(L, B, run_index);
-    if (run_index == 0) ngline_dev_run_fill_white(L, B, L->constr_len);
+    for (unsigned ri = 0; ri < L->constr_len; ri++) {
+        ngline_dev_run_fill_white(L, B, ri);
+        ngline_dev_run_fill_black(L, B, &L->b_runs[ri], L->constr[ri]);
+    }
+    ngline_dev_run_fill_white(L, B, L->constr_len);
 
 }
 
