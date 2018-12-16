@@ -137,7 +137,9 @@ Time in nanoseconds was measured for execution of both the parallel and sequenti
 
 ## Data
 
+![Data.](./data.png)
 
+![Graph.](./graph.png)
 
 ## Analysis
 
