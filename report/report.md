@@ -132,7 +132,16 @@ Also, when solving with a guessed cell (a hypothetical state), a single thread b
 # Results
 Ultimately a speedup was not realized on any of the puzzles the solvers were benchmarked with. There are a number of factors that could have contributed to this result; they are outlined below. While in theory a parallel implementation could outperform a sequential one, in practice it is likely that such a result could be achieved using the same technologies that this solver was created with.
 
-## Memory
+## Setup
+Time in nanoseconds was measured for execution of both the parallel and sequential implementations. For the parallel implementation, time to transfer data to device memory was not included in the measreument. A number of puzzles were tested. They varied in size as well as complexity, or more measurably, how many guesses were required to solve the puzzle.
+
+## Data
+
+
+
+## Analysis
+
+### Memory
 One of the main limiting factors was memory latency. While the transfer of data was minimized as much as possible during the solving process (transfer before and after solving was excluded from the timings), it was still necessary to transfer data between device global memory and shared memory. For the simple boards that could be solved by pure line solving, this transfer only happened once, however, the solving was also quickly finished, so the overhead of data transfer was significant.
 
 On larger boards, every time a guess was made, new kernels were launched, with the need to copy to shared memory again (and the need to copy back depended on whether a contradiction was reached). One of the goals for a lookahead solver is to find contradictions quickly. However kernels that found contradictions, as well as kernels with bad guesses that made no progress, were relatively short-lived. This meant that the data transfer for that kernel was essentially wasted.
@@ -143,14 +152,14 @@ The amount of data being transferred was very small compared to typical transfer
 
 Finally, though shared block memory was large enough (48KB) for a single board, it was not large enough for more than two boards at once. This meant that for lookahead solving, it was not possible to make more than two guesses (both on the same cell) and run in parallel without having to use global memory. Using global memory was not desirable since a copy of the board would still have to be made, which would mean allocation, data transfer and eventually freeing the memory, incurring more overhead.
 
-## Divergence
+### Divergence
 As hypothesized, another major problem was divergent execution. In order to solve efficiently, it was necessary to condition on the state of each line at many points, and every line was in a different state. Some lines would be solved and some would not, and some lines would have many constraints and some would have only a few. NVVP shows a warp execution efficiency average of 25% on #1739.
 
 One of the optimizations in this area was to split the row and columns solvers into different warps. This would have helped during line traversal, since there were a different number of cells in the rows and the columns. This was done by creating some dummy threads that remained idle during the kernel, participating only in synchronization. As can be seen from the data, this significantly reduced computation time on the simpler boards, suggesting that a large part of the computation time on the simple solving is a result of divergent execution.
 
 Reducing synchronization points within each kernel affected running time significantly. The algorithm used involves solving from the perspective of the run constraints and then from the perspective of the blocks already on board. Removing the synchronization between these two phases, which allows them to run concurrently, as well as the synchronization between the column and row phases, provided a 10% reduction in computation time on #1739. This was despite the possibility of requiring more iterations to arrive at the solved state or a dead end.
 
-## Puzzle availability
+### Puzzle availability
 Because of the nature of human-friendly nonograms, even the hardest nonograms from webpbn.com were solved in less than 1 second on both the sequential and parallel solvers. This lack of large puzzles somewhat hindered the testing of the parallel solver
 
 ## Potential improvements
@@ -166,3 +175,6 @@ As theorized in the approach section and confirmed by the measured results, bein
 Consider a puzzle with 400 rows and 400 columns. It would require 16x the memory as the largest puzzles that were able to be found for this benchmark. However, such a puzzle would only have 800 total line solvers, merely 4x as many. In general it can be noted that for a square puzzle with length n along each dimension, the resource requirements grow with O(n^2) while the benefit from parallelizing the line solvers only grows with O(n). While such a puzzle might not exceed the resources of the entire GPU, it would almost certainly be too large for a single thread block.
 
 Additionally, though it was not included in the timing of the runs of the parallel solver, the resource requirements of the solver include overhead of transferring data to the GPU.
+
+# Distribution of work
+Roughly 2/3 of the work was performed by Benjamin, who implemented the majority of the solver. 1/3 was performed by Eric, who wrote the majority of the proposal and the reports.
